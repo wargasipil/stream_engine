@@ -58,12 +58,14 @@ func NewKeyValueCounter(cfg *CoreConfig) (*KeyValueCounter, error) {
 	}, nil
 }
 
-func (kvc *KeyValueCounter) IncUint(key string, delta uint64) uint64 {
+func (kvc *KeyValueCounter) IncUint(key string, delta uint64, writeWal bool) uint64 {
 
-	kvc.wal.Append(&wal_message.CounterUint{
-		Key:   key,
-		Value: delta,
-	})
+	if writeWal {
+		kvc.wal.Append(&wal_message.CounterUint{
+			Key:   key,
+			Value: delta,
+		})
+	}
 	hkey := hashKey(key)
 
 	kvc.lock.Lock()

@@ -21,9 +21,14 @@ func main() {
 	stream_core.Replay(cfg.WalDir, func(data []byte) {
 		msg := &wal_message.CounterUint{}
 		proto.Unmarshal(data, msg)
-		// counter.IncUint(msg.Key, msg.Value)
-		log.Println(msg.Key, msg.Value)
+		counter.IncUint(msg.Key, msg.Value, false)
+		// log.Println(msg.Key, msg.Value)
 	})
+
+	value := counter.GetUint("test.key")
+	log.Println("test.key in wal =", value)
+
+	return
 
 	timeout := time.NewTimer(time.Minute)
 
@@ -33,14 +38,14 @@ Parent:
 		case <-timeout.C:
 			break Parent
 		default:
-			counter.IncUint("test.key", 1)
-			counter.IncUint("test.key", 2)
-			counter.IncUint("test.key2", 12)
-			counter.IncUint("test.key2", 3)
+			counter.IncUint("test.key", 1, true)
+			counter.IncUint("test.key", 2, true)
+			counter.IncUint("test.key2", 12, true)
+			counter.IncUint("test.key2", 3, true)
 		}
 	}
 
-	value := counter.GetUint("test.key")
+	value = counter.GetUint("test.key")
 	log.Println("test.key =", value)
 	counter.Snapshot(func(keyid string, value uint64) error {
 		log.Println(keyid, value)

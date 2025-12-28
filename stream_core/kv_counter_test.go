@@ -26,10 +26,10 @@ func TestKeyvalueCounter(t *testing.T) {
 		log.Println(msg.Key, msg.Value)
 	})
 
-	counter.IncUint("test.key", 1)
-	counter.IncUint("test.key", 2)
-	counter.IncUint("test.key2", 12)
-	counter.IncUint("test.key2", 3)
+	counter.IncUint("test.key", 1, true)
+	counter.IncUint("test.key", 2, true)
+	counter.IncUint("test.key2", 12, true)
+	counter.IncUint("test.key2", 3, true)
 
 	value := counter.GetUint("test.key")
 	assert.Equal(t, uint64(3), value)
