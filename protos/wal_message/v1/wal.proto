@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package wal_message.v1;
+
+// import "buf/validate/validate.proto";
+// import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/wargasipil/stream_engine/proto_core/wal_message/v1;wal_message";
+
+enum WalSerialization {
+  WAL_SERIALIZATION_UNSPECIFIED = 0;
+  WAL_SERIALIZATION_PROTO = 1;
+  WAL_SERIALIZATION_JSON = 2;
+}
+
+message CounterUint {
+  string key = 1;
+  uint64 value = 2;
+}
