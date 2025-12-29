@@ -4,9 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/wargasipil/stream_engine/proto_core/wal_message/v1"
 	"github.com/wargasipil/stream_engine/stream_core"
-	"google.golang.org/protobuf/proto"
 )
 
 func main() {
@@ -18,19 +16,21 @@ func main() {
 
 	defer counter.Close()
 
-	stream_core.Replay(cfg.WalDir, func(data []byte) {
-		msg := &wal_message.CounterUint{}
-		proto.Unmarshal(data, msg)
-		counter.IncUint(msg.Key, msg.Value, false)
-		// log.Println(msg.Key, msg.Value)
-	})
+	// stream_core.Replay(cfg.WalDir, func(data []byte) {
+	// 	msg := &wal_message.CounterUint{}
+	// 	proto.Unmarshal(data, msg)
+	// 	counter.IncUint(msg.Key, msg.Value)
+	// 	// log.Println(msg.Key, msg.Value)
+	// })
 
-	value := counter.GetUint("test.key")
-	log.Println("test.key in wal =", value)
+	// value := counter.GetUint("test.key")
+	// log.Println("test.key in wal =", value)
 
-	return
+	// return
 
-	timeout := time.NewTimer(time.Minute)
+	// reflect.Uint16
+
+	timeout := time.NewTimer(time.Second * 5)
 
 Parent:
 	for {
@@ -38,16 +38,22 @@ Parent:
 		case <-timeout.C:
 			break Parent
 		default:
-			counter.IncUint("test.key", 1, true)
-			// counter.IncUint("test.key", 2, true)
-			counter.IncUint("test.key2", 12, true)
-			counter.IncUint("test.key2", 3, true)
+			counter.IncUint("order_count/team:1/product:1/warehouse:2", 3)
+			counter.IncUint("order_count/team:1/product:1/warehouse:1", 2)
+			counter.IncUint("order_count/team:1/product:2", 1)
 		}
 	}
 
-	value = counter.GetUint("test.key")
-	log.Println("test.key =", value)
-	counter.Snapshot(func(keyid string, value uint64) error {
+	key := stream_core.CounterKey("order_count/team:1/product:1/warehouse:2")
+
+	for _, k := range key.Iterate() {
+		log.Printf("%s count %d\n", k, counter.GetUint(k))
+	}
+
+	log.Printf("team 2 count %d\n", counter.GetUint("order_count/team:2"))
+	log.Printf("team 1 count %d\n", counter.GetUint("order_count/team:1"))
+
+	counter.Snapshot(time.Now().AddDate(-1, 0, 0), func(keyid string, value uint64) error {
 		log.Println(keyid, value)
 		return nil
 	})
