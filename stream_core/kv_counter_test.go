@@ -1,12 +1,12 @@
 package stream_core_test
 
 import (
-	"kvcounter/proto_core/wal_message/v1"
-	"kvcounter/stream_core"
 	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/wargasipil/stream_engine/proto_core/wal_message/v1"
+	"github.com/wargasipil/stream_engine/stream_core"
 	"google.golang.org/protobuf/proto"
 )
 

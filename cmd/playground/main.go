@@ -1,11 +1,11 @@
 package main
 
 import (
-	"kvcounter/proto_core/wal_message/v1"
-	"kvcounter/stream_core"
 	"log"
 	"time"
 
+	"github.com/wargasipil/stream_engine/proto_core/wal_message/v1"
+	"github.com/wargasipil/stream_engine/stream_core"
 	"google.golang.org/protobuf/proto"
 )
 

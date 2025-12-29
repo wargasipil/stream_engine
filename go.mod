@@ -1,6 +1,6 @@
-module kvcounter
+module github.com/wargasipil/stream_engine
 
-go 1.23
+go 1.24.2
 
 require google.golang.org/protobuf v1.36.11
 

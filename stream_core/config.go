@@ -1,8 +1,9 @@
 package stream_core
 
 import (
-	"kvcounter/proto_core/wal_message/v1"
 	"os"
+
+	"github.com/wargasipil/stream_engine/proto_core/wal_message/v1"
 )
 
 type CoreConfig struct {

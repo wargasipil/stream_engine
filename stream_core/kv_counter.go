@@ -3,7 +3,7 @@ package stream_core
 import (
 	"encoding/binary"
 	"hash/fnv"
-	"kvcounter/proto_core/wal_message/v1"
+
 	"os"
 	"strconv"
 	"sync"
@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/edsrzf/mmap-go"
+	"github.com/wargasipil/stream_engine/proto_core/wal_message/v1"
 )
 
 const (
