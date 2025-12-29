@@ -1,60 +1,83 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
+	"github.com/wargasipil/stream_engine/storage"
 	"github.com/wargasipil/stream_engine/stream_core"
 )
 
 func main() {
-	cfg := stream_core.NewDefaultCoreConfigTest()
-	counter, err := stream_core.NewKeyValueCounter(cfg)
+	ctx := context.Background()
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT") // or set directly
+	collection := "experimental"
+
+	fs, err := storage.NewFirestoreKeyStorage(ctx, projectID, collection)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to init firestore: %v", err)
 	}
+	defer fs.Close()
 
-	defer counter.Close()
+	// err = fs.Increment("users/1/products/42", "order_count", 20)
+	// if err != nil {
+	// 	log.Fatalf("Increment failed: %v", err)
+	// }
 
-	// stream_core.Replay(cfg.WalDir, func(data []byte) {
-	// 	msg := &wal_message.CounterUint{}
-	// 	proto.Unmarshal(data, msg)
-	// 	counter.IncUint(msg.Key, msg.Value)
-	// 	// log.Println(msg.Key, msg.Value)
-	// })
+	// err = fs.Increment("users/default", "order_count", 20)
+	// if err != nil {
+	// 	log.Fatalf("Increment failed: %v", err)
+	// }
 
-	// value := counter.GetUint("test.key")
-	// log.Println("test.key in wal =", value)
+	// cfg := stream_core.NewDefaultCoreConfigTest()
+	cfg := stream_core.NewDefaultCoreConfig()
 
-	// return
+	kv, err := stream_core.NewKeyValueCounter(cfg)
+	if err != nil {
+		log.Fatalf("failed to init kv counter: %v", err)
+	}
+	defer kv.Close()
 
-	// reflect.Uint16
+	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_count"), 5)
+	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_count"), 10)
+	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_amount"), 12000)
+	kv.IncInt(stream_core.CounterKey("users/1/products/42/stock_pending"), 5)
 
-	timeout := time.NewTimer(time.Second * 5)
+	data, ts := kv.GetInt("users/default/order_count")
+	log.Printf("users/default/order_count: %d (timestamp: %s)", data, time.UnixMilli(ts).String())
 
-Parent:
-	for {
-		select {
-		case <-timeout.C:
-			break Parent
-		default:
-			counter.IncUint("order_count/team:1/product:1/warehouse:2", 3)
-			counter.IncUint("order_count/team:1/product:1/warehouse:1", 2)
-			counter.IncUint("order_count/team:1/product:2", 1)
+	err = getExample(func(e Entry) error {
+		var teamID string
+		if e.TeamID == e.AccountTeamID {
+			teamID = "default"
+		} else {
+			teamID = fmt.Sprintf("%d", e.AccountID)
 		}
-	}
+		key := fmt.Sprintf(
+			"teams/%d/daily/%s/%s/%s",
+			e.TeamID,
+			e.EntryTime.Format("2006-01-02"),
+			e.AccountKey,
+			teamID,
+		)
 
-	key := stream_core.CounterKey("order_count/team:1/product:1/warehouse:2")
+		keyDebit := key + "/debit"
+		keyCredit := key + "/credit"
 
-	for _, k := range key.Iterate() {
-		log.Printf("%s count %d\n", k, counter.GetUint(k))
-	}
+		kv.IncInt(stream_core.CounterKey(keyDebit), e.Debit)
+		kv.IncInt(stream_core.CounterKey(keyCredit), e.Credit)
 
-	log.Printf("team 2 count %d\n", counter.GetUint("order_count/team:2"))
-	log.Printf("team 1 count %d\n", counter.GetUint("order_count/team:1"))
+		return nil
+	})
 
-	counter.Snapshot(time.Now().AddDate(-1, 0, 0), func(keyid string, value uint64) error {
-		log.Println(keyid, value)
+	kv.Snapshot(time.Now().AddDate(-1, 0, 0), func(key stream_core.CounterKey, value int64) error {
+		// log.Printf("%s with counter: %d\n", key, value)
+		field, path := key.CounterName()
+		log.Println(field, path, value)
+		// err = fs.Increment(path, field, value)
 		return nil
 	})
 }

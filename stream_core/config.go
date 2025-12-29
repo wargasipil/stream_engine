@@ -17,7 +17,7 @@ func NewDefaultCoreConfig() *CoreConfig {
 	return &CoreConfig{
 		WalDir:         "/tmp/stream_engine/wal",
 		KVCounterPath:  "/tmp/stream_engine/kv_counter",
-		KVCounterSlots: 1_000_000,
+		KVCounterSlots: 100_000_000,
 	}
 }
 
