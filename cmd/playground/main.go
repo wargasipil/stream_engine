@@ -39,7 +39,7 @@ Parent:
 			break Parent
 		default:
 			counter.IncUint("test.key", 1, true)
-			counter.IncUint("test.key", 2, true)
+			// counter.IncUint("test.key", 2, true)
 			counter.IncUint("test.key2", 12, true)
 			counter.IncUint("test.key2", 3, true)
 		}
