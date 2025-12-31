@@ -124,7 +124,6 @@ func (kvc *KeyValueCounter) IncInt(key CounterKey, delta int64) int64 {
 			kvc.index.ReplaceOrInsert(KVItem{Key: []byte(ckey), Off: off})
 
 			binary.LittleEndian.PutUint64(kvc.data[off:off+8], uint64(delta))
-			binary.LittleEndian.PutUint64(kvc.data[off:off+8], uint64(delta))
 			val = delta
 		}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -38,45 +37,45 @@ func main() {
 	// cfg := stream_core.NewDefaultCoreConfigTest()
 	cfg := stream_core.NewDefaultCoreConfig()
 
-	kv, err := stream_core.NewKeyValueCounter(cfg)
+	kv, err := stream_core.NewHashMapCounter(cfg)
 	if err != nil {
 		log.Fatalf("failed to init kv counter: %v", err)
 	}
 	defer kv.Close()
 
-	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_count"), 5)
-	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_count"), 10)
-	kv.IncInt(stream_core.CounterKey("users/1/products/42/order_amount"), 12000)
-	kv.IncInt(stream_core.CounterKey("users/1/products/42/stock_pending"), 5)
+	kv.IncInt("users/1/products/42/order_count", 5)
+	kv.IncInt("users/1/products/42/order_count", 10)
+	kv.IncInt("users/1/products/42/order_amount", 12000)
+	kv.IncInt("users/1/products/42/stock_pending", 5)
 
-	data, ts := kv.GetInt("users/default/order_count")
-	log.Printf("users/default/order_count: %d (timestamp: %s)", data, time.UnixMilli(ts).String())
+	data := kv.GetInt("users/default/order_count")
+	log.Printf("users/default/order_count: %d", data)
 
 	start := time.Now()
 
-	err = iterateExample(func(e *Transaction) error {
-		var teamID string
-		if e.TeamID == e.AccountTeamID {
-			teamID = "default"
-		} else {
-			teamID = fmt.Sprintf("%d", e.AccountID)
-		}
-		key := fmt.Sprintf(
-			"teams/%d/daily/%s/%s/%s",
-			e.TeamID,
-			(time.Time)(e.EntryTime).Format("2006-01-02"),
-			e.AccountKey,
-			teamID,
-		)
+	// err = iterateExample(func(e *Transaction) error {
+	// 	var teamID string
+	// 	if e.TeamID == e.AccountTeamID {
+	// 		teamID = "default"
+	// 	} else {
+	// 		teamID = fmt.Sprintf("%d", e.AccountID)
+	// 	}
+	// 	key := fmt.Sprintf(
+	// 		"teams/%d/daily/%s/%s/%s",
+	// 		e.TeamID,
+	// 		(time.Time)(e.EntryTime).Format("2006-01-02"),
+	// 		e.AccountKey,
+	// 		teamID,
+	// 	)
 
-		keyDebit := key + "/debit"
-		keyCredit := key + "/credit"
+	// 	keyDebit := key + "/debit"
+	// 	keyCredit := key + "/credit"
 
-		kv.IncInt(stream_core.CounterKey(keyDebit), int64(e.Debit))
-		kv.IncInt(stream_core.CounterKey(keyCredit), int64(e.Credit))
+	// 	kv.IncInt(keyDebit, int64(e.Debit))
+	// 	kv.IncInt(keyCredit, int64(e.Credit))
 
-		return nil
-	})
+	// 	return nil
+	// })
 
 	duration := time.Since(start)
 
