@@ -1,113 +1,100 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type EntryRaw struct {
-	ID            string `json:"id"`
-	AccountID     string `json:"account_id"`
-	TeamID        string `json:"team_id"`
-	AccountTeamID string `json:"account_team_id"`
-	TransactionID string `json:"transaction_id"`
-	CreatedByID   string `json:"created_by_id"`
-	EntryTime     string `json:"entry_time"`
-	Debit         string `json:"debit"`
-	Credit        string `json:"credit"`
-	Rollback      string `json:"rollback"`
-	AccountKey    string `json:"account_key"`
-	BalanceType   string `json:"balance_type"`
-	CanAdjust     string `json:"can_adjust"`
-	ShopID        string `json:"shop_id"`
-}
+type Int64String int64
 
-type Entry struct {
-	ID            int64
-	AccountID     int64
-	TeamID        int64
-	AccountTeamID int64
-	TransactionID int64
-	CreatedByID   int64
-	EntryTime     time.Time
-	Debit         int64
-	Credit        int64
-	Rollback      bool
-	AccountKey    string
-	BalanceType   string
-	CanAdjust     bool
-	ShopID        int64
-}
-
-func parseInt(s string) int64 {
+func (i *Int64String) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
 	if strings.Contains(s, ".") {
-		v, _ := strconv.ParseFloat(s, 64)
-		return int64(v * 1000)
+		s = strings.Split(s, ".")[0]
 	}
-	v, err := strconv.ParseInt(s, 10, 64)
+	val, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	return v
+	*i = Int64String(val)
+	return nil
 }
 
-func parseBool(s string) bool {
-	v, err := strconv.ParseBool(s)
-	if err != nil {
-		panic(err)
+type TimeRFC3339 time.Time
+
+func (t *TimeRFC3339) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
 	}
-	return v
+
+	parsed, err := time.Parse("2006-01-02 15:04:05.999999 MST", s)
+	if err != nil {
+		return err
+	}
+
+	*t = TimeRFC3339(parsed)
+	return nil
 }
 
-func parseTime(s string) time.Time {
-	t, err := time.Parse("2006-01-02 15:04:05.999999 MST", s)
-	if err != nil {
-		panic(err)
-	}
-	return t
+type Transaction struct {
+	ID            Int64String `json:"id"`
+	AccountID     Int64String `json:"account_id"`
+	TeamID        Int64String `json:"team_id"`
+	TransactionID Int64String `json:"transaction_id"`
+	CreatedByID   Int64String `json:"created_by_id"`
+	EntryTime     TimeRFC3339 `json:"entry_time"`
+	Debit         Int64String `json:"debit"`
+	Credit        Int64String `json:"credit"`
+	Rollback      bool        `json:"rollback"`
+	AccountTeamID Int64String `json:"account_team_id"`
+	AccountKey    string      `json:"account_key"`
+	Coa           string      `json:"coa"`
+	BalanceType   string      `json:"balance_type"`
+	CanAdjust     bool        `json:"can_adjust"`
+	ShopID        Int64String `json:"shop_id"`
 }
 
-func getExample(handler func(e Entry) error) error {
-	var err error
-	// 1. Read file
-	data, err := os.ReadFile("example.json")
+func iterateExample(handler func(data *Transaction) error) error {
+	file, err := os.Open("example.json")
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 
-	// 2. Unmarshal raw JSON
-	var raw []EntryRaw
-	if err := json.Unmarshal(data, &raw); err != nil {
-		panic(err)
-	}
+	reader := bufio.NewReader(file)
+	decoder := json.NewDecoder(reader)
 
-	// 3. Convert & iterate
-	for _, r := range raw {
-		e := Entry{
-			ID:            parseInt(r.ID),
-			AccountID:     parseInt(r.AccountID),
-			TeamID:        parseInt(r.TeamID),
-			AccountTeamID: parseInt(r.AccountTeamID),
-			TransactionID: parseInt(r.TransactionID),
-			CreatedByID:   parseInt(r.CreatedByID),
-			EntryTime:     parseTime(r.EntryTime),
-			Debit:         parseInt(r.Debit),
-			Credit:        parseInt(r.Credit),
-			Rollback:      parseBool(r.Rollback),
-			AccountKey:    r.AccountKey,
-			BalanceType:   r.BalanceType,
-			CanAdjust:     parseBool(r.CanAdjust),
-			ShopID:        parseInt(r.ShopID),
+	count := 0
+
+	for {
+		var record Transaction
+		err := decoder.Decode(&record)
+		if err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			fmt.Printf("decode error: %v\n", err)
+			continue
 		}
 
-		err = handler(e)
+		// Process record (example)
+		err = handler(&record)
 		if err != nil {
 			return err
 		}
+
+		count++
 	}
 
 	return nil
+
 }
