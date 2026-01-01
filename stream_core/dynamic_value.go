@@ -2,7 +2,7 @@ package stream_core
 
 import (
 	"encoding/binary"
-	"log"
+	"errors"
 	"os"
 	"sync"
 
@@ -15,7 +15,7 @@ current offset
 | 8 byte offset | body dynamic
 
 body dynamic
-| 8 byte key_length | 8 byte data legth | data dynamic
+| 8 byte key_length | 8 byte data length | 8 byte key hash | data dynamic
 
 structured hashmap counter
 | 8 byte type_key | 8 byte pointer to dynamic value | 8 byte counter value | 8 byte for timestamp
@@ -26,11 +26,16 @@ note:
 */
 
 const (
-	FILE_SIZE_INCREASE = 1_000_000 * 5
-	KEY_LEN_OFFSET     = 0
-	DATA_LEN_OFFSET    = 8
-	DATA_OFFSET        = 16
+	FILE_SIZE_INCREASE    = 1_000_000 * 5
+	DYNAMIC_METADATA_SIZE = 8
+	KEY_METADATA_SIZE     = 24
+	KEY_LEN_OFFSET        = 0
+	DATA_LEN_OFFSET       = 8
+	KEY_HASH_OFFSET       = 16
+	DATA_OFFSET           = 24
 )
+
+var ErrBreakDynamicRead = errors.New("break dynamic read")
 
 type DynamicValue struct {
 	filesize      int64
@@ -86,6 +91,40 @@ func NewDynamicValue(cfg *CoreConfig) (*DynamicValue, error) {
 	}, nil
 }
 
+func (d *DynamicValue) Iterate(handler func(key string, hash int64, data []byte) error) error {
+	var offset int64 = DYNAMIC_METADATA_SIZE
+	var err error
+
+	for {
+		keylen := int64(binary.LittleEndian.Uint64(d.data[offset+KEY_LEN_OFFSET : offset+KEY_LEN_OFFSET+8]))
+		datalen := int64(binary.LittleEndian.Uint64(d.data[offset+DATA_LEN_OFFSET : offset+DATA_LEN_OFFSET+8]))
+
+		nextOffset := offset + KEY_METADATA_SIZE + keylen + datalen
+		// log.Println("asdasdddds", d.data[offset+KEY_LEN_OFFSET:offset+KEY_LEN_OFFSET+8])
+		// log.Printf("offset %d next offset %d\n", offset, nextOffset)
+		if nextOffset > d.currentOffset {
+			break
+		}
+
+		key := d.data[offset+DATA_OFFSET : offset+DATA_OFFSET+keylen]
+		keyhash := binary.LittleEndian.Uint64(d.data[offset+KEY_HASH_OFFSET : offset+KEY_HASH_OFFSET+8])
+		data := d.data[offset+DATA_OFFSET+keylen : offset+DATA_OFFSET+keylen+datalen]
+
+		// log.Printf("[%d] ddkey : %s %s\n", offset, string(key), data)
+		err = handler(string(key), int64(keyhash), data)
+		if err != nil {
+			if errors.Is(err, ErrBreakDynamicRead) {
+				return nil
+			}
+			return err
+		}
+
+		offset = nextOffset
+	}
+
+	return nil
+}
+
 func (d *DynamicValue) Get(offset int64) (string, []byte) {
 	keylenbin := d.data[offset+KEY_LEN_OFFSET : offset+KEY_LEN_OFFSET+8]
 	keylen := int64(binary.LittleEndian.Uint64(keylenbin))
@@ -99,12 +138,16 @@ func (d *DynamicValue) Get(offset int64) (string, []byte) {
 	return string(key), data
 }
 
-func (d *DynamicValue) Write(key string, data []byte) (int64, error) {
+func (d *DynamicValue) GetData(offset int64) []byte {
+	return d.data[offset+DATA_LEN_OFFSET : offset+DATA_LEN_OFFSET+8]
+}
+
+func (d *DynamicValue) Write(key string, keyhash int64, data []byte) (int64, error) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	currentoffset := d.currentOffset
-	log.Println(currentoffset)
+	// log.Println(currentoffset)
 
 	keylen := int64(len(key))
 	datalen := int64(len(data))
@@ -116,9 +159,10 @@ func (d *DynamicValue) Write(key string, data []byte) (int64, error) {
 		}
 	}
 
-	binary.LittleEndian.PutUint64(d.data[d.currentOffset:d.currentOffset+8], uint64(keylen))
-	binary.LittleEndian.PutUint64(d.data[d.currentOffset+8:d.currentOffset+16], uint64(keylen))
-	d.currentOffset += 16
+	binary.LittleEndian.PutUint64(d.data[d.currentOffset+KEY_LEN_OFFSET:d.currentOffset+KEY_LEN_OFFSET+8], uint64(keylen))
+	binary.LittleEndian.PutUint64(d.data[d.currentOffset+DATA_LEN_OFFSET:d.currentOffset+DATA_LEN_OFFSET+8], uint64(datalen))
+	binary.LittleEndian.PutUint64(d.data[d.currentOffset+KEY_HASH_OFFSET:d.currentOffset+KEY_HASH_OFFSET+8], uint64(keyhash))
+	d.currentOffset += KEY_METADATA_SIZE
 
 	// writing key
 	for _, b := range []byte(key) {

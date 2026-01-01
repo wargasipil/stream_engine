@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -48,44 +49,51 @@ func main() {
 	kv.IncInt("users/1/products/42/order_amount", 12000)
 	kv.IncInt("users/1/products/42/stock_pending", 5)
 
-	data := kv.GetInt("users/default/order_count")
-	log.Printf("users/default/order_count: %d", data)
+	data := kv.GetInt("users/1/products/42/order_count")
+	log.Printf("users/1/products/42/order_count: %d", data)
 
 	start := time.Now()
 
-	// err = iterateExample(func(e *Transaction) error {
-	// 	var teamID string
-	// 	if e.TeamID == e.AccountTeamID {
-	// 		teamID = "default"
-	// 	} else {
-	// 		teamID = fmt.Sprintf("%d", e.AccountID)
-	// 	}
-	// 	key := fmt.Sprintf(
-	// 		"teams/%d/daily/%s/%s/%s",
-	// 		e.TeamID,
-	// 		(time.Time)(e.EntryTime).Format("2006-01-02"),
-	// 		e.AccountKey,
-	// 		teamID,
-	// 	)
+	err = iterateExample("example-tiny.json", func(e *Transaction) error {
+		var teamID string
+		if e.TeamID == e.AccountTeamID {
+			teamID = "default"
+		} else {
+			teamID = fmt.Sprintf("%d", e.AccountID)
+		}
+		key := fmt.Sprintf(
+			"teams/%d/daily/%s/%s/%s",
+			e.TeamID,
+			(time.Time)(e.EntryTime).Format("2006-01-02"),
+			e.AccountKey,
+			teamID,
+		)
 
-	// 	keyDebit := key + "/debit"
-	// 	keyCredit := key + "/credit"
+		keyDebit := key + "/debit"
+		keyCredit := key + "/credit"
 
-	// 	kv.IncInt(keyDebit, int64(e.Debit))
-	// 	kv.IncInt(keyCredit, int64(e.Credit))
+		kv.IncInt(keyDebit, int64(e.Debit))
+		kv.IncInt(keyCredit, int64(e.Credit))
 
-	// 	return nil
-	// })
+		// log.Println(key)
+		return nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
 
 	duration := time.Since(start)
 
-	kv.Snapshot(time.Now().AddDate(-1, 0, 0), func(key stream_core.CounterKey, value int64) error {
-		// log.Printf("%s with counter: %d\n", key, value)
-		field, path := key.CounterName()
-		log.Println(field, path, value)
-		// err = fs.Increment(path, field, value)
+	kv.Snapshot(start, func(key string, value int64) error {
+		log.Println(key, value)
 		return nil
 	})
 
 	log.Printf("duration seconds %s", duration)
+
+	kv.IncInt("teams/78/daily/2025-12-02/ads_expense/default/credit", 1)
+
+	delta := kv.IncInt("test_key", 12)
+	log.Println("asdasd", kv.GetInt("test_key"), delta)
 }

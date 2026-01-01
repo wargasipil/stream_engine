@@ -2,7 +2,10 @@ module github.com/wargasipil/stream_engine
 
 go 1.24.2
 
-require google.golang.org/protobuf v1.36.11
+require (
+	github.com/cespare/xxhash v1.1.0
+	google.golang.org/protobuf v1.36.11
+)
 
 require (
 	cloud.google.com/go v0.121.6 // indirect

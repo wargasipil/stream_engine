@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -63,8 +62,8 @@ type Transaction struct {
 	ShopID        Int64String `json:"shop_id"`
 }
 
-func iterateExample(handler func(data *Transaction) error) error {
-	file, err := os.Open("example.json")
+func iterateExample(fname string, handler func(data *Transaction) error) error {
+	file, err := os.Open(fname)
 	if err != nil {
 		panic(err)
 	}
@@ -82,8 +81,7 @@ func iterateExample(handler func(data *Transaction) error) error {
 			if err.Error() == "EOF" {
 				break
 			}
-			fmt.Printf("decode error: %v\n", err)
-			continue
+			return err
 		}
 
 		// Process record (example)
