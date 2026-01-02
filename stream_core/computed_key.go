@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"sort"
@@ -138,8 +137,6 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 			panic("merge counter typedata not supported")
 		}
 
-		// set timestamp
-		binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
 		// set type key
 		binary.LittleEndian.PutUint64(hm.data[offset+TYPE_KEY_OFFSET:offset+TYPE_KEY_OFFSET+8], uint64(MergeKeyType))
 
@@ -149,7 +146,7 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 			return 0, err
 		}
 
-		log.Println("new pointer offset", keyOffset)
+		// log.Println("new pointer offset", keyOffset)
 
 		// set key pointer
 		binary.LittleEndian.PutUint64(hm.data[offset+KEY_POINTER_OFFSET:offset+KEY_POINTER_OFFSET+8], uint64(keyOffset))
@@ -172,6 +169,9 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 			return 0, fmt.Errorf("%s derrived counter type inconsistent", computedKey)
 		}
 	}
+
+	// set timestamp
+	binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
 
 	// recalculate key
 	var accvalue accumulator

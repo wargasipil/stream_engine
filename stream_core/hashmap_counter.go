@@ -2,6 +2,7 @@ package stream_core
 
 import (
 	"encoding/binary"
+	"log"
 	"math"
 	"os"
 	"reflect"
@@ -188,6 +189,10 @@ func (hm *HashMapCounter) ResetCounter() error {
 
 	return err
 
+}
+
+func (hm *HashMapCounter) PrintStat() {
+	log.Printf("key_count: %d", hm.keyCount)
 }
 
 func getCurrentCount(m mmap.MMap) uint64 {
