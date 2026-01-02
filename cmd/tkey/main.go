@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/wargasipil/stream_engine/stream_core"
@@ -9,7 +10,7 @@ import (
 
 func main() {
 	cfg := stream_core.NewDefaultCoreConfigTest()
-	cfg.HashMapCounterSlots = 100
+	cfg.HashMapCounterSlots = 128
 
 	before := time.Now()
 
@@ -18,20 +19,22 @@ func main() {
 		log.Fatalf("failed to init kv counter: %v", err)
 	}
 	defer kv.Close()
-	kv.IncInt("user/order_count", 1)
-	kv.IncInt("user/order_count_cross", 2)
-	kv.IncInt("user/price", 3)
+	kv.IncInt64("user/order_count", int64(1))
+	kv.IncInt64("user/order_count_cross", int64(2))
+	kv.IncInt64("user/price", int64(3))
 
 	// checking key nt supported
-	acckey, _ := kv.MergeInt(
+	acckey, _ := kv.Merge(
 		stream_core.MergeOpAdd,
+		reflect.Uint64,
 		"user/all_order",
 		"user/order_count",
 		"user/order_count_cross",
 	)
 
-	kv.MergeInt(
+	kv.Merge(
 		stream_core.MergeOpAdd,
+		reflect.Int64,
 		"user/order_count_cross_total",
 		"user/all_order",
 		"user/order_count",
@@ -39,13 +42,13 @@ func main() {
 		"user/price",
 	)
 
-	accget := kv.GetInt("user/all_order")
+	accget := kv.GetUint64("user/all_order")
 
-	kv.Snapshot(before, func(key string, value int64) error {
+	kv.Snapshot(before, func(key string, kind reflect.Kind, value any) error {
 		log.Println("snapshot", key, value)
 		return nil
 	})
 
-	log.Println("user/all_order", acckey, accget)
+	log.Println("user/all_order", accget, acckey)
 
 }

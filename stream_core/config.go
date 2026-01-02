@@ -29,7 +29,7 @@ func NewDefaultCoreConfigTest() *CoreConfig {
 	return &CoreConfig{
 		WalDir:              "/tmp/stream_engine/wal_test",
 		HashMapCounterPath:  "/tmp/stream_engine/hm_counter_test",
-		HashMapCounterSlots: 100,
+		HashMapCounterSlots: 32,
 		DynamicValuePath:    "/tmp/stream_engine/dynamic_value_test",
 	}
 }

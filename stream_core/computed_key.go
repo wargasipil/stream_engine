@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
+	"math"
+	"reflect"
 	"sort"
 	"time"
 )
@@ -87,7 +90,7 @@ func (m MergeData) getSourceHash() int64 {
 
 // ---------------------------- merge int implementation ---------------------------------
 
-func (hm *HashMapCounter) MergeInt(op MergeOps, computedKey string, keys ...string) (int64, error) {
+func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey string, keys ...string) (any, error) {
 	hkey := hm.hash.hash(computedKey)
 	offset := hkey + HASHMAP_METADATA_SIZE
 
@@ -123,6 +126,18 @@ func (hm *HashMapCounter) MergeInt(op MergeOps, computedKey string, keys ...stri
 		hm.keyCount += 1
 		setCurrentCount(hm.data, hm.keyCount)
 
+		// set counter typedata
+		switch kind {
+		case reflect.Uint64:
+			hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Uint64)
+		case reflect.Int64:
+			hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Int64)
+		case reflect.Float64:
+			hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Float64)
+		default:
+			panic("merge counter typedata not supported")
+		}
+
 		// set timestamp
 		binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
 		// set type key
@@ -133,36 +148,108 @@ func (hm *HashMapCounter) MergeInt(op MergeOps, computedKey string, keys ...stri
 		if err != nil {
 			return 0, err
 		}
+
+		log.Println("new pointer offset", keyOffset)
+
 		// set key pointer
 		binary.LittleEndian.PutUint64(hm.data[offset+KEY_POINTER_OFFSET:offset+KEY_POINTER_OFFSET+8], uint64(keyOffset))
 
 	} else {
 		// checking keyhash before
-		var mdata MergeData = hm.dynamicValue.GetData(hkey)
+		mdataOffset := int64(binary.LittleEndian.Uint64(hm.data[offset+KEY_POINTER_OFFSET : offset+KEY_POINTER_OFFSET+8]))
+		log.Println("exist pointer offset", mdataOffset)
+
+		var mdata MergeData = hm.dynamicValue.GetData(mdataOffset)
+		log.Println("source hash", mdata.getSourceHash(), mergeData.getSourceHash())
+
 		if mdata.getSourceHash() != mergeData.getSourceHash() {
 			return 0, fmt.Errorf("%s derrived key hash changed", computedKey)
+		}
+
+		// checking counter data
+		existKind := reflect.Kind(hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET])
+		if existKind != kind {
+			return 0, fmt.Errorf("%s derrived counter type inconsistent", computedKey)
 		}
 	}
 
 	// recalculate key
-	var accvalue uint64
-	for _, offsetKey := range mergeData.keys() {
-		value := binary.LittleEndian.Uint64(hm.data[offsetKey+HASHMAP_METADATA_SIZE+COUNTER_OFFSET : offsetKey+HASHMAP_METADATA_SIZE+COUNTER_OFFSET+8])
-		switch op {
-		case MergeOpAdd:
-			accvalue += value
-		case MergeOpDivide:
-			accvalue = accvalue / value
-		case MergeOpMultiply:
-			accvalue = accvalue * value
-		case MergeOpMin:
-			accvalue -= value
-		}
+	var accvalue accumulator
+	existKind := reflect.Kind(hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET])
 
-		// log.Println("offset", value, offsetKey+HASHMAP_METADATA_SIZE+COUNTER_OFFSET)
+	switch existKind {
+	case reflect.Uint64:
+		accvalue = &accumulatorImpl[uint64]{}
+	case reflect.Int64:
+		accvalue = &accumulatorImpl[int64]{}
+	case reflect.Float64:
+		accvalue = &accumulatorImpl[float64]{}
+	default:
+		panic("merge counter typedata not supported")
 	}
-	binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], accvalue)
 
-	return int64(accvalue), nil
+	for _, offsetKey := range mergeData.keys() {
+		bytesValue := hm.data[offsetKey+HASHMAP_METADATA_SIZE+COUNTER_OFFSET : offsetKey+HASHMAP_METADATA_SIZE+COUNTER_OFFSET+8]
+		typeValue := reflect.Kind(hm.data[offsetKey+HASHMAP_METADATA_SIZE+HASHMAP_TYPE_COUNTER_OFFSET])
 
+		accvalue.ops(op, typeValue, bytesValue)
+
+	}
+	binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], accvalue.getUint64())
+
+	return accvalue.getValue(), nil
+}
+
+type accumulator interface {
+	ops(op MergeOps, src reflect.Kind, value []byte)
+	getUint64() uint64
+	getValue() any
+}
+
+type accumulatorImpl[T int64 | uint64 | float64] struct {
+	value T
+}
+
+func (a *accumulatorImpl[T]) getValue() any {
+	return a.value
+}
+
+func (a *accumulatorImpl[T]) getUint64() uint64 {
+	switch val := any(a.value).(type) {
+	case uint64:
+		return val
+	case int64:
+		return uint64(val)
+	case float64:
+		return math.Float64bits(val)
+	default:
+		panic("convert value typedata not supported")
+	}
+
+}
+
+func (a *accumulatorImpl[T]) ops(op MergeOps, src reflect.Kind, value []byte) {
+	switch op {
+	case MergeOpAdd:
+		a.value += a.convert(src, value)
+	case MergeOpDivide:
+		a.value = a.value / a.convert(src, value)
+	case MergeOpMultiply:
+		a.value = a.value * a.convert(src, value)
+	case MergeOpMin:
+		a.value -= a.convert(src, value)
+	}
+}
+
+func (a *accumulatorImpl[T]) convert(src reflect.Kind, value []byte) T {
+	switch src {
+	case reflect.Uint64:
+		return T(binary.LittleEndian.Uint64(value))
+	case reflect.Int64:
+		return T(binary.LittleEndian.Uint64(value))
+	case reflect.Float64:
+		return T(math.Float64frombits(binary.LittleEndian.Uint64(value)))
+	default:
+		panic("convert value typedata not supported")
+	}
 }

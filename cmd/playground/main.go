@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/wargasipil/stream_engine/stream_core"
@@ -44,17 +45,17 @@ func main() {
 	}
 	defer kv.Close()
 
-	kv.IncInt("users/1/products/42/order_count", 5)
-	kv.IncInt("users/1/products/42/order_count", 10)
-	kv.IncInt("users/1/products/42/order_amount", 12000)
-	kv.IncInt("users/1/products/42/stock_pending", 5)
+	kv.IncInt64("users/1/products/42/order_count", 5)
+	kv.IncInt64("users/1/products/42/order_count", 10)
+	kv.IncInt64("users/1/products/42/order_amount", 12000)
+	kv.IncInt64("users/1/products/42/stock_pending", 5)
 
-	data := kv.GetInt("users/1/products/42/order_count")
+	data := kv.GetInt64("users/1/products/42/order_count")
 	log.Printf("users/1/products/42/order_count: %d", data)
 
 	start := time.Now()
 
-	err = iterateExample("example-tiny.json", func(e *Transaction) error {
+	err = iterateExample("example.json", func(e *Transaction) error {
 		var teamID string
 		if e.TeamID == e.AccountTeamID {
 			teamID = "default"
@@ -72,8 +73,8 @@ func main() {
 		keyDebit := key + "/debit"
 		keyCredit := key + "/credit"
 
-		kv.IncInt(keyDebit, int64(e.Debit))
-		kv.IncInt(keyCredit, int64(e.Credit))
+		kv.IncInt64(keyDebit, int64(e.Debit))
+		kv.IncInt64(keyCredit, int64(e.Credit))
 
 		// log.Println(key)
 		return nil
@@ -85,15 +86,15 @@ func main() {
 
 	duration := time.Since(start)
 
-	kv.Snapshot(start, func(key string, value int64) error {
+	kv.Snapshot(start, func(key string, kind reflect.Kind, value any) error {
 		log.Println(key, value)
 		return nil
 	})
 
 	log.Printf("duration seconds %s", duration)
 
-	kv.IncInt("teams/78/daily/2025-12-02/ads_expense/default/credit", 1)
+	kv.IncInt64("teams/78/daily/2025-12-02/ads_expense/default/credit", 1)
 
-	delta := kv.IncInt("test_key", 12)
-	log.Println("asdasd", kv.GetInt("test_key"), delta)
+	delta := kv.IncInt64("test_key", 12)
+	log.Println("asdasd", kv.GetInt64("test_key"), delta)
 }

@@ -17,12 +17,6 @@ current offset
 body dynamic
 | 8 byte key_length | 8 byte data length | 8 byte key hash | data dynamic
 
-structured hashmap counter
-| 8 byte type_key | 8 byte pointer to dynamic value | 8 byte counter value | 8 byte for timestamp
-
-note:
-	- type_key: is counter_key or dynamic_key
-
 */
 
 const (
@@ -139,7 +133,8 @@ func (d *DynamicValue) Get(offset int64) (string, []byte) {
 }
 
 func (d *DynamicValue) GetData(offset int64) []byte {
-	return d.data[offset+DATA_LEN_OFFSET : offset+DATA_LEN_OFFSET+8]
+	keylen := int64(binary.LittleEndian.Uint64(d.data[offset+KEY_LEN_OFFSET : offset+KEY_LEN_OFFSET+8]))
+	return d.data[offset+keylen+DATA_OFFSET : offset+keylen+DATA_OFFSET+8]
 }
 
 func (d *DynamicValue) Write(key string, keyhash int64, data []byte) (int64, error) {

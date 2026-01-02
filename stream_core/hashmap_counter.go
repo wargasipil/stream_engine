@@ -2,7 +2,9 @@ package stream_core
 
 import (
 	"encoding/binary"
+	"math"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -21,20 +23,22 @@ structured hashmap counter metadata
 | 8 byte key_count | hashmap data
 
 structured hashmap counter
-| 8 byte type_key | 8 byte pointer to dynamic value | 8 byte counter value | 8 byte for timestamp
+| 1 byte for data_type | 8 byte type_key | 8 byte pointer to dynamic value | 8 byte counter value | 8 byte for timestamp
 
 note:
 	- type_key: is counter_key or dynamic_key
+	- data_type: type counter like float64 or int64 or uint64
 
 */
 
 const (
-	HASHMAP_SLOT_SIZE     = 32
-	HASHMAP_METADATA_SIZE = 8
-	TYPE_KEY_OFFSET       = 0
-	KEY_POINTER_OFFSET    = 8
-	COUNTER_OFFSET        = 16
-	TIMESTAMP_OFFSET      = 24
+	HASHMAP_SLOT_SIZE           = 33
+	HASHMAP_TYPE_COUNTER_OFFSET = 0
+	HASHMAP_METADATA_SIZE       = 9
+	TYPE_KEY_OFFSET             = 1
+	KEY_POINTER_OFFSET          = 8
+	COUNTER_OFFSET              = 17
+	TIMESTAMP_OFFSET            = 25
 )
 
 const (
@@ -107,57 +111,13 @@ func NewHashMapCounter(cfg *CoreConfig) (*HashMapCounter, error) {
 	}, nil
 }
 
-func (hm *HashMapCounter) IncInt(key string, delta int64) int64 {
-
-	hm.lock.Lock()
-	defer hm.lock.Unlock()
-
-	t := time.Now().UnixMilli()
-	ts := uint64(t)
-	hkey := hm.hash.hash(key)
-	offset := hkey + HASHMAP_METADATA_SIZE // offset + current count metadata
-	// log.Printf("offset %d\n", offset)
-
-	lastts := binary.LittleEndian.Uint64(hm.data[offset+TIMESTAMP_OFFSET : offset+TIMESTAMP_OFFSET+8])
-	// log.Println("inc", time.UnixMilli(int64(lastts)).String())
-	if lastts == 0 {
-		hm.keyCount += 1
-		setCurrentCount(hm.data, hm.keyCount)
-
-		// set timestamp
-		binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
-		// set counter
-		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], uint64(delta))
-		// set type key
-		binary.LittleEndian.PutUint64(hm.data[offset+TYPE_KEY_OFFSET:offset+TYPE_KEY_OFFSET+8], uint64(CounterKeyType))
-		// set key pointer
-		var counter byte = CounterKeyType
-		keyOffset, err := hm.dynamicValue.Write(key, hkey, []byte{counter})
-		if err != nil {
-			panic(err)
-		}
-		binary.LittleEndian.PutUint64(hm.data[offset+KEY_POINTER_OFFSET:offset+KEY_POINTER_OFFSET+8], uint64(keyOffset))
-		return delta
+func (d *HashMapCounter) Close() error {
+	err := d.dynamicValue.Close()
+	if err != nil {
+		return err
 	}
 
-	// jika sudah ada
-	binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
-	// counter := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
-	prevVal := int64(binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8]))
-	nextVal := prevVal + delta
-	binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], uint64(nextVal))
-	// log.Println(prevVal, "-->", nextVal)
-	return nextVal
-}
-
-func (hm *HashMapCounter) GetInt(key string) int64 {
-	offset := hm.hash.hash(key) + HASHMAP_METADATA_SIZE
-	counter := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
-	return int64(counter)
-}
-
-func (d *HashMapCounter) Close() error {
-	err := d.data.Flush()
+	err = d.data.Flush()
 	if err != nil {
 		return err
 	}
@@ -171,7 +131,7 @@ func (d *HashMapCounter) Close() error {
 	return err
 }
 
-func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, value int64) error) error {
+func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, kind reflect.Kind, value any) error) error {
 	var err error
 
 	hm.lock.Lock()
@@ -188,8 +148,21 @@ func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, value i
 			return nil
 		}
 
+		// getting value
 		value := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
-		err = handler(key, int64(value))
+
+		// getting type key
+		typeKey := reflect.Kind(hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET])
+		switch typeKey {
+		case reflect.Uint64:
+			err = handler(key, reflect.Uint64, value)
+		case reflect.Int64:
+			err = handler(key, reflect.Int64, int64(value))
+		case reflect.Float64:
+			err = handler(key, reflect.Float64, math.Float64frombits(value))
+		default:
+			err = handler(key, reflect.Uint64, value)
+		}
 
 		if err != nil {
 			return err
