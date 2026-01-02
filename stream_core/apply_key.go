@@ -25,7 +25,7 @@ func (hm *HashMapCounter) getCounter(key string) any {
 	}
 }
 
-func (hm *HashMapCounter) apply(key string, delta any) any {
+func (hm *HashMapCounter) apply(key string, delta any, replace bool) any {
 	hm.lock.Lock()
 	defer hm.lock.Unlock()
 
@@ -81,7 +81,12 @@ func (hm *HashMapCounter) apply(key string, delta any) any {
 			panic("apply counter typedata false")
 		}
 		prevVal := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
-		nextVal := prevVal + val
+		var nextVal uint64
+		if replace {
+			nextVal = replaceOps(prevVal, val)
+		} else {
+			nextVal = addOps(prevVal, val)
+		}
 		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], uint64(nextVal))
 
 		return nextVal
@@ -90,7 +95,12 @@ func (hm *HashMapCounter) apply(key string, delta any) any {
 			panic("apply counter typedata false")
 		}
 		prevVal := int64(binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8]))
-		nextVal := prevVal + val
+		var nextVal int64
+		if replace {
+			nextVal = replaceOps(prevVal, val)
+		} else {
+			nextVal = addOps(prevVal, val)
+		}
 		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], uint64(nextVal))
 
 		return nextVal
@@ -100,11 +110,24 @@ func (hm *HashMapCounter) apply(key string, delta any) any {
 		}
 		d := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
 		prevVal := math.Float64frombits(d)
-		nextVal := prevVal + val
+		var nextVal float64
+		if replace {
+			nextVal = replaceOps(prevVal, val)
+		} else {
+			nextVal = addOps(prevVal, val)
+		}
 		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], math.Float64bits(nextVal))
 
 		return nextVal
 	default:
 		panic("apply counter typedata not supported")
 	}
+}
+
+func replaceOps[T uint64 | int64 | float64](prev T, next T) T {
+	return next
+}
+
+func addOps[T uint64 | int64 | float64](prev T, next T) T {
+	return prev + next
 }
