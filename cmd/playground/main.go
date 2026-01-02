@@ -45,6 +45,8 @@ func main() {
 	}
 	defer kv.Close()
 
+	// resetting counter
+
 	kv.IncInt64("users/1/products/42/order_count", 5)
 	kv.IncInt64("users/1/products/42/order_count", 10)
 	kv.IncInt64("users/1/products/42/order_amount", 12000)

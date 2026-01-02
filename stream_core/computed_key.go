@@ -157,10 +157,10 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 	} else {
 		// checking keyhash before
 		mdataOffset := int64(binary.LittleEndian.Uint64(hm.data[offset+KEY_POINTER_OFFSET : offset+KEY_POINTER_OFFSET+8]))
-		log.Println("exist pointer offset", mdataOffset)
+		// log.Println("exist pointer offset", mdataOffset)
 
 		var mdata MergeData = hm.dynamicValue.GetData(mdataOffset)
-		log.Println("source hash", mdata.getSourceHash(), mergeData.getSourceHash())
+		// log.Println("source hash", mdata.getSourceHash(), mergeData.getSourceHash())
 
 		if mdata.getSourceHash() != mergeData.getSourceHash() {
 			return 0, fmt.Errorf("%s derrived key hash changed", computedKey)

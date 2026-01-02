@@ -173,6 +173,23 @@ func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, kind re
 	return err
 }
 
+func (hm *HashMapCounter) ResetCounter() error {
+	var err error
+	hm.lock.Lock()
+	defer hm.lock.Unlock()
+
+	err = hm.dynamicValue.Iterate(func(key string, khash int64, data []byte) error {
+		// log.Println(khash, "offset hash")
+		offset := khash + HASHMAP_METADATA_SIZE
+		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], 0)
+
+		return nil
+	})
+
+	return err
+
+}
+
 func getCurrentCount(m mmap.MMap) uint64 {
 	offset := m[0:8]
 	return binary.LittleEndian.Uint64(offset)

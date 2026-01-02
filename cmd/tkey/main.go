@@ -19,6 +19,8 @@ func main() {
 		log.Fatalf("failed to init kv counter: %v", err)
 	}
 	defer kv.Close()
+	kv.ResetCounter()
+
 	kv.IncInt64("user/order_count", int64(1))
 	kv.IncInt64("user/order_count_cross", int64(2))
 	kv.IncInt64("user/price", int64(3))
