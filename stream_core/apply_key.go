@@ -2,14 +2,12 @@ package stream_core
 
 import (
 	"encoding/binary"
-	"log"
 	"math"
 	"reflect"
 	"time"
 )
 
-func (hm *HashMapCounter) getCounter(key string) any {
-	log.Println(key)
+func (hm *HashMapCounter) getCounter(mustKind reflect.Kind, key string) any {
 	offset := hm.hash.hash(key) + HASHMAP_METADATA_SIZE
 	counter := binary.LittleEndian.Uint64(hm.data[offset+COUNTER_OFFSET : offset+COUNTER_OFFSET+8])
 	typeCounter := reflect.Kind(hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET])
@@ -20,6 +18,17 @@ func (hm *HashMapCounter) getCounter(key string) any {
 		return int64(counter)
 	case reflect.Float64:
 		return math.Float64frombits(counter)
+	case reflect.Invalid:
+		switch mustKind {
+		case reflect.Uint64:
+			return uint64(counter)
+		case reflect.Int64:
+			return int64(counter)
+		case reflect.Float64:
+			return math.Float64frombits(counter)
+		default:
+			panic("get counter typedata default not supported")
+		}
 	default:
 		panic("get counter typedata not supported")
 	}

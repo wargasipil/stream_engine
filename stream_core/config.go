@@ -20,7 +20,7 @@ func NewDefaultCoreConfig() *CoreConfig {
 	return &CoreConfig{
 		WalDir:              "/tmp/stream_engine/wal",
 		HashMapCounterPath:  "/tmp/stream_engine/hm_counter",
-		HashMapCounterSlots: 100_000_000,
+		HashMapCounterSlots: 536_870_912,
 		DynamicValuePath:    "/tmp/stream_engine/dynamic_value",
 	}
 }

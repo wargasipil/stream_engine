@@ -26,6 +26,10 @@ func TestHashmap(t *testing.T) {
 
 	defer kv.Close()
 
+	t.Run("testing get unknown key", func(t *testing.T) {
+		kv.GetFloat64("ss")
+	})
+
 	t.Run("testing increment float", func(t *testing.T) {
 		newkey := kv.IncFloat64("users/ads_spents", 2000.01)
 		assert.Equal(t, float64(2000.01), newkey)
