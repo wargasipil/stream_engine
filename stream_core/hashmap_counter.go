@@ -132,6 +132,15 @@ func (d *HashMapCounter) Close() error {
 	return err
 }
 
+func (hm *HashMapCounter) KeyCollision(key string) string {
+	hkey := hm.hash.hash(key)
+	offset := hkey + HASHMAP_METADATA_SIZE
+
+	offsetValue := binary.LittleEndian.Uint64(hm.data[offset+KEY_POINTER_OFFSET : offset+KEY_POINTER_OFFSET+8])
+	dkey, _ := hm.dynamicValue.Get(int64(offsetValue))
+	return dkey
+}
+
 func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, kind reflect.Kind, value any) error) error {
 	var err error
 

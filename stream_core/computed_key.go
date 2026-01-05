@@ -90,6 +90,22 @@ func (m MergeData) getSourceHash() int64 {
 // ---------------------------- merge int implementation ---------------------------------
 
 func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey string, keys ...string) (any, error) {
+	hm.lock.Lock()
+	defer hm.lock.Unlock()
+
+	// checking key
+	var hdkey int64
+	var hdkeyoff int64
+	var dts uint64
+	for _, dkey := range keys {
+		hdkey = hm.hash.hash(dkey)
+		hdkeyoff = hdkey + HASHMAP_METADATA_SIZE
+		dts = binary.LittleEndian.Uint64(hm.data[hdkeyoff+TIMESTAMP_OFFSET : hdkeyoff+TIMESTAMP_OFFSET+8])
+		if dts == 0 {
+			hm.createKey(dkey, kind)
+		}
+	}
+
 	hkey := hm.hash.hash(computedKey)
 	offset := hkey + HASHMAP_METADATA_SIZE
 
@@ -112,9 +128,6 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 	}
 
 	mergeData.setHashKeys(hm.hash, derrivedKeys)
-
-	hm.lock.Lock()
-	defer hm.lock.Unlock()
 
 	lastts := binary.LittleEndian.Uint64(hm.data[offset+TIMESTAMP_OFFSET : offset+TIMESTAMP_OFFSET+8])
 
@@ -193,6 +206,7 @@ func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey stri
 		typeValue := reflect.Kind(hm.data[offsetKey+HASHMAP_METADATA_SIZE+HASHMAP_TYPE_COUNTER_OFFSET])
 
 		accvalue.ops(op, typeValue, bytesValue)
+		// log.Println(computedKey, binary.LittleEndian.Uint64(bytesValue), accvalue.getUint64(), accvalue.getValue())
 
 	}
 	binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], accvalue.getUint64())
@@ -223,7 +237,7 @@ func (a *accumulatorImpl[T]) getUint64() uint64 {
 	case float64:
 		return math.Float64bits(val)
 	default:
-		panic("convert value typedata not supported")
+		panic("convert get uint value typedata not supported")
 	}
 
 }

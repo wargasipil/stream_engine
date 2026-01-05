@@ -2,6 +2,7 @@ package stream_core
 
 import (
 	"encoding/binary"
+	"log"
 	"math"
 	"reflect"
 	"time"
@@ -131,6 +132,51 @@ func (hm *HashMapCounter) apply(key string, delta any, replace bool) any {
 	default:
 		panic("apply counter typedata not supported")
 	}
+}
+
+// warning: ini nggak nge lock
+func (hm *HashMapCounter) createKey(key string, kind reflect.Kind) {
+
+	hkey := hm.hash.hash(key)
+	offset := hkey + HASHMAP_METADATA_SIZE
+
+	oldts := binary.LittleEndian.Uint64(hm.data[offset+TIMESTAMP_OFFSET : offset+TIMESTAMP_OFFSET+8])
+	if oldts != 0 {
+		log.Fatalf("created exist key %s", key)
+	}
+
+	hm.keyCount += 1
+	setCurrentCount(hm.data, hm.keyCount)
+
+	// set counter and counter typedata
+	switch kind {
+	case reflect.Uint64:
+		hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Uint64)
+		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], 0)
+	case reflect.Int64:
+		hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Int64)
+		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], 0)
+	case reflect.Float64:
+		hm.data[offset+HASHMAP_TYPE_COUNTER_OFFSET] = byte(reflect.Float64)
+		d := math.Float64bits(0)
+		binary.LittleEndian.PutUint64(hm.data[offset+COUNTER_OFFSET:offset+COUNTER_OFFSET+8], d)
+	default:
+		panic("create counter typedata not supported")
+	}
+
+	ts := time.Now().UnixMilli()
+	// set timestamp
+	binary.LittleEndian.PutUint64(hm.data[offset+TIMESTAMP_OFFSET:offset+TIMESTAMP_OFFSET+8], uint64(ts))
+	// set type key
+	binary.LittleEndian.PutUint64(hm.data[offset+TYPE_KEY_OFFSET:offset+TYPE_KEY_OFFSET+8], uint64(CounterKeyType))
+	// set key pointer
+	var counter byte = CounterKeyType
+	keyOffset, err := hm.dynamicValue.Write(key, hkey, []byte{counter})
+	if err != nil {
+		panic(err)
+	}
+	binary.LittleEndian.PutUint64(hm.data[offset+KEY_POINTER_OFFSET:offset+KEY_POINTER_OFFSET+8], uint64(keyOffset))
+
 }
 
 func replaceOps[T uint64 | int64 | float64](prev T, next T) T {

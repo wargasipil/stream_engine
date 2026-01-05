@@ -66,16 +66,18 @@ func TestHashmap(t *testing.T) {
 		)
 		assert.NotNil(t, err, "tidak punya merge key")
 
-		// t.Run("testing merge non exist key", func(t *testing.T) {
-		// 	_, err = kv.Merge(stream_core.MergeOpAdd, reflect.Uint64, "product/all_stock_not_exist",
-		// 		"product/stock",
-		// 		"product/pending_stock_not_exist",
-		// 	)
-		// 	assert.Nil(t, err)
+		t.Run("testing merge non exist key", func(t *testing.T) {
+			assert.Equal(t, int64(2), kv.GetInt64("product/stock"))
 
-		// 	value := kv.GetUint64("product/all_stock")
-		// 	assert.Equal(t, uint64(3), value)
-		// })
+			_, err = kv.Merge(stream_core.MergeOpAdd, reflect.Uint64, "product/all_stock_not_exist",
+				"product/stock",
+				"product/pending_stock_not_exist",
+			)
+			assert.Nil(t, err)
+
+			value := kv.GetUint64("product/all_stock_not_exist")
+			assert.Equal(t, uint64(2), value)
+		})
 
 		t.Run("testing merge normal", func(t *testing.T) {
 			_, err = kv.Merge(stream_core.MergeOpAdd, reflect.Uint64, "product/all_stock",
