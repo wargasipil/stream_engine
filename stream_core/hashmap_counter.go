@@ -200,6 +200,23 @@ func (hm *HashMapCounter) ResetCounter() error {
 
 }
 
+func (hm *HashMapCounter) Lock() {
+	hm.lock.Lock()
+}
+
+func (hm *HashMapCounter) Unlock() {
+	hm.lock.Unlock()
+}
+
+func (hm *HashMapCounter) GetDynamicValue() *DynamicValue {
+	return hm.dynamicValue
+}
+
+func (hm *HashMapCounter) GetBytes(keyhash int64) []byte {
+	offset := keyhash + HASHMAP_METADATA_SIZE
+	return hm.data[offset : offset+HASHMAP_SLOT_SIZE]
+}
+
 func (hm *HashMapCounter) PrintStat() {
 	log.Printf("key_count: %d", hm.keyCount)
 }

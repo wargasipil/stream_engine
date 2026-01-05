@@ -223,3 +223,10 @@ func getCurrentOffset(m mmap.MMap) int64 {
 func setCurrentOffset(m mmap.MMap, offset int64) {
 	binary.LittleEndian.PutUint64(m[0:8], uint64(offset))
 }
+
+// type dinamicIterator struct {
+// 	currentOffset int64
+// 	dynamic       *DynamicValue
+// }
+
+// func New
