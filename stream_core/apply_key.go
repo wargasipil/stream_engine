@@ -36,8 +36,6 @@ func (hm *HashMapCounter) getCounter(mustKind reflect.Kind, key string) any {
 }
 
 func (hm *HashMapCounter) apply(key string, delta any, replace bool) any {
-	hm.lock.Lock()
-	defer hm.lock.Unlock()
 
 	t := time.Now().UnixMilli()
 	ts := uint64(t)

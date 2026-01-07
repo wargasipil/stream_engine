@@ -2,6 +2,7 @@ package stream_core
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math"
 	"os"
@@ -132,20 +133,28 @@ func (d *HashMapCounter) Close() error {
 	return err
 }
 
-func (hm *HashMapCounter) KeyCollision(key string) string {
+func (hm *HashMapCounter) KeyCollision(key string) (string, error) {
 	hkey := hm.hash.hash(key)
 	offset := hkey + HASHMAP_METADATA_SIZE
+	ts := binary.LittleEndian.Uint64(hm.data[offset+TIMESTAMP_OFFSET : offset+TIMESTAMP_OFFSET+8])
+	if ts == 0 {
+		return "not found", fmt.Errorf("key %s not found", key)
+	}
 
 	offsetValue := binary.LittleEndian.Uint64(hm.data[offset+KEY_POINTER_OFFSET : offset+KEY_POINTER_OFFSET+8])
+	// log.Println("asdasd", hkey, key, hm.data[offset:offset+HASHMAP_METADATA_SIZE])
+	// return ""
 	dkey, _ := hm.dynamicValue.Get(int64(offsetValue))
-	return dkey
+	return dkey, nil
 }
 
-func (hm *HashMapCounter) Snapshot(t time.Time, handler func(key string, kind reflect.Kind, value any) error) error {
+func (hm *HashMapCounter) Snapshot(t time.Time, lock bool, handler func(key string, kind reflect.Kind, value any) error) error {
 	var err error
 
-	hm.lock.Lock()
-	defer hm.lock.Unlock()
+	if lock {
+		hm.lock.Lock()
+		defer hm.lock.Unlock()
+	}
 
 	tsFilter := uint64(t.UnixMilli())
 	err = hm.dynamicValue.Iterate(func(key string, khash int64, data []byte) error {

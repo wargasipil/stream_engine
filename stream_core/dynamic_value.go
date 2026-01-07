@@ -120,6 +120,9 @@ func (d *DynamicValue) Iterate(handler func(key string, hash int64, data []byte)
 }
 
 func (d *DynamicValue) Get(offset int64) (string, []byte) {
+	if offset == 0 {
+		panic("offset is zero data corupt")
+	}
 	keylenbin := d.data[offset+KEY_LEN_OFFSET : offset+KEY_LEN_OFFSET+8]
 	keylen := int64(binary.LittleEndian.Uint64(keylenbin))
 

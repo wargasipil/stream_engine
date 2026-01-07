@@ -89,7 +89,7 @@ func (m MergeData) getSourceHash() int64 {
 
 // ---------------------------- merge int implementation ---------------------------------
 
-func (hm *HashMapCounter) Merge(op MergeOps, kind reflect.Kind, computedKey string, keys ...string) (any, error) {
+func (hm *HashMapCounter) MergeDeprecated(op MergeOps, kind reflect.Kind, computedKey string, keys ...string) (any, error) {
 	hm.lock.Lock()
 	defer hm.lock.Unlock()
 

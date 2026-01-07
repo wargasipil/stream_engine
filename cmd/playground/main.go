@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -51,48 +50,48 @@ func main() {
 	err = iterateExample("example-tiny.json", func(e *Transaction) error {
 		// var teamID string
 
-		accountkey := fmt.Sprintf("%s", e.AccountKey)
+		// accountkey := fmt.Sprintf("%s", e.AccountKey)
 
-		kv.IncFloat64("debit", float64(e.Debit))
-		kv.IncFloat64("credit", float64(e.Credit))
-		switch e.BalanceType {
-		case "d":
-			kv.Merge(stream_core.MergeOpMin,
-				reflect.Float64,
-				"balance",
-				"debit",
-				"credit",
-			)
-		case "c":
-			kv.Merge(stream_core.MergeOpMin,
-				reflect.Float64,
-				"balance",
-				"credit",
-				"debit",
-			)
+		// kv.IncFloat64("debit", float64(e.Debit))
+		// kv.IncFloat64("credit", float64(e.Credit))
+		// switch e.BalanceType {
+		// case "d":
+		// 	kv.Merge(stream_core.MergeOpMin,
+		// 		reflect.Float64,
+		// 		"balance",
+		// 		"debit",
+		// 		"credit",
+		// 	)
+		// case "c":
+		// 	kv.Merge(stream_core.MergeOpMin,
+		// 		reflect.Float64,
+		// 		"balance",
+		// 		"credit",
+		// 		"debit",
+		// 	)
 
-		}
+		// }
 
-		kv.IncFloat64(accountkey+"/debit", float64(e.Debit))
-		kv.IncFloat64(accountkey+"/credit", float64(e.Credit))
+		// kv.IncFloat64(accountkey+"/debit", float64(e.Debit))
+		// kv.IncFloat64(accountkey+"/credit", float64(e.Credit))
 
-		switch e.BalanceType {
-		case "d":
-			kv.Merge(stream_core.MergeOpMin,
-				reflect.Float64,
-				accountkey+"/balance",
-				accountkey+"/debit",
-				accountkey+"/credit",
-			)
-		case "c":
-			kv.Merge(stream_core.MergeOpMin,
-				reflect.Float64,
-				accountkey+"/balance",
-				accountkey+"/credit",
-				accountkey+"/debit",
-			)
+		// switch e.BalanceType {
+		// case "d":
+		// 	kv.Merge(stream_core.MergeOpMin,
+		// 		reflect.Float64,
+		// 		accountkey+"/balance",
+		// 		accountkey+"/debit",
+		// 		accountkey+"/credit",
+		// 	)
+		// case "c":
+		// 	kv.Merge(stream_core.MergeOpMin,
+		// 		reflect.Float64,
+		// 		accountkey+"/balance",
+		// 		accountkey+"/credit",
+		// 		accountkey+"/debit",
+		// 	)
 
-		}
+		// }
 
 		// if e.TeamID == e.AccountTeamID {
 		// 	teamID = "default"
@@ -123,7 +122,7 @@ func main() {
 
 	duration := time.Since(start)
 
-	kv.Snapshot(start, func(key string, kind reflect.Kind, value any) error {
+	kv.Snapshot(start, true, func(key string, kind reflect.Kind, value any) error {
 		log.Printf("%s\t%.3f\n", key, value)
 		return nil
 	})

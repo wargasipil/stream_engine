@@ -125,7 +125,7 @@ func NewDatabaseLocal() LocalDatabase {
 	return db
 }
 
-func hashKey(key string) uint64 {
-	h := xxhash.Sum64String(key)
-	return h
-}
+// func hashKey(key string) uint64 {
+// 	h := xxhash.Sum64String(key)
+// 	return h
+// }
