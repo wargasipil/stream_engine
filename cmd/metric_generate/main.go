@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"golang.org/x/tools/go/packages"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 		fname = os.Getenv("GOFILE")
 	} else {
 		if len(os.Args) == 1 {
-			fname = "./stream_schema/schema.go"
+			fname = "./example/schema.go"
 		} else {
 			fname = os.Args[1]
 		}
@@ -53,11 +54,21 @@ func main() {
 	}
 	defer wfile.Close()
 
+	// getting package path
+	packagePath, err := packagePathFromFile(fname)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println(packagePath)
+
 	// writing package name
 	wfile.Write([]byte(fmt.Sprintf("package %s\n\n", file.Name.Name)))
 	// wfile.WriteString("import \"github.com/wargasipil/stream_engine/stream_core\"\n\n")
 	wfile.WriteString(`import (
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/wargasipil/stream_engine/stream_core"
@@ -85,22 +96,41 @@ func main() {
 
 		// getting index metric
 		var indexMap = map[string]bool{}
+		indexPaths := []string{}
 
 		var indexFields strings.Builder
 		var counterFuncs strings.Builder
 		var initparams strings.Builder
 		var initstruct strings.Builder
 		var initbody strings.Builder
+		var initbodyKey strings.Builder
+		initbodyKey.WriteString(`
+	var err error
+
+	keys := strings.Split(mkey, "/")
+	if len(keys) <= 2 {
+		return nil, errors.New("key invalid")
+	}
+	Name := keys[0]
+	names := strings.Split(Name, "_")
+	indexkeys := keys[1:]
+	key := Name + "/" + strings.Join(indexkeys[:len(names)], "/")
+	if len(indexkeys) <= 1 {
+		return nil, errors.New("index on key invalid")
+	}`)
+		initbodyKey.WriteString("\n")
+
 		// creating key
 		initbody.WriteString("\tkeys := []string{}\n")
 		initbody.WriteString("\tnames := []string{}\n")
 
 		initparams.WriteString("store stream_core.KeyStore")
-		initstruct.WriteString("\t\tName: strings.Join(names, \"_\"),\n")
-		initstruct.WriteString("\t\tkey: strings.Join(keys, \"/\"),\n")
+		initstruct.WriteString("\t\tName: Name,\n")
+		initstruct.WriteString("\t\tkey: key,\n")
 
 		mapIndex := map[string]bool{}
 		var idfield string
+		indexC := 0
 		for _, field := range st.Fields.List {
 
 			var haveIndex bool
@@ -121,9 +151,9 @@ func main() {
 			tipe := field.Type.(*ast.Ident)
 			name := field.Names[0].Name
 
-			indexPath := CamelToSnake(strings.ReplaceAll(name, "ID", ""))
-
 			if haveIndex { // generating untuk index
+				indexPath := strings.ToLower(strings.ReplaceAll(name, "ID", ""))
+
 				indexMap[name] = true
 				indexFields.WriteString("\t// Jangan Diubah letterlek\n\t" + name + " " + tipe.Name + "\n")
 				if initparams.Len() > 0 {
@@ -133,19 +163,51 @@ func main() {
 				initstruct.WriteString("\t\t" + name + ": " + name + ",\n")
 
 				var value string
+				var forKey string
 				switch tipe.Name {
 				case "uint64", "int64", "float64":
-					value = "fmt.Sprintf(\"" + indexPath + "/%d\", " + name + ")"
+					value = "fmt.Sprintf(\"%d\", " + name + ")"
 				case "string":
-					value = "fmt.Sprintf(\"" + indexPath + "/%s\", " + name + ")"
+					value = "fmt.Sprintf(\"%s\", " + name + ")"
 				default:
 					value = "not_implemented"
+				}
+
+				errdec := `
+	if err != nil {
+		return nil, err
+	}`
+
+				switch tipe.Name {
+				case "uint64":
+					initbodyKey.WriteString(fmt.Sprintf("\tvar %s uint64\n", name))
+					initbodyKey.WriteString(fmt.Sprintf("\t%s, err = strconv.ParseUint(indexkeys[%d], 10, 64)\n", name, indexC))
+					initbodyKey.WriteString(errdec)
+					initbodyKey.WriteString("\n")
+				case "int64":
+					initbodyKey.WriteString(fmt.Sprintf("\tvar %s int64\n", name))
+					initbodyKey.WriteString(fmt.Sprintf("\t%s, err = strconv.ParseInt(indexkeys[%d], 10, 64)\n", name, indexC))
+					initbodyKey.WriteString(errdec)
+					initbodyKey.WriteString("\n")
+				case "float64":
+					// strconv.ParseFloat(s, 64)
+					initbodyKey.WriteString(fmt.Sprintf("\tvar %s float64\n", name))
+					initbodyKey.WriteString(fmt.Sprintf("\t%s, err = strconv.ParseFloat(indexkeys[%d], 64)\n", name, indexC))
+					initbodyKey.WriteString(errdec)
+					initbodyKey.WriteString("\n")
+				case "string":
+					forKey = fmt.Sprintf("var %s string = indexkeys[%d]", name, indexC)
+					initbodyKey.WriteString("\t" + forKey + "\n")
 				}
 
 				initbody.WriteString("\tkeys = append(keys, " + value + ")\n")
 				initbody.WriteString("\tnames = append(names, \"" + indexPath + "\")\n")
 
+				indexPaths = append(indexPaths, indexPath)
+				indexC += 1
+
 			} else {
+				indexPath := CamelToSnake(name)
 				addfunc := cases.Title(language.English).String(tipe.Name)
 				// add put
 				counterFuncs.WriteString("func (m *" + metricName + ") Put" + name + "(value " + tipe.Name + ") " + tipe.Name + " {\n")
@@ -162,6 +224,9 @@ func main() {
 			}
 
 		}
+
+		initbody.WriteString("\tkey := fmt.Sprintf(\"%s/%s\", strings.Join(names, \"_\"), strings.Join(keys, \"/\"))\n")
+		initbody.WriteString("\tName := strings.Join(names, \"_\")\n")
 
 		if idfield == "" {
 			log.Fatalf("there is no tag metric:\"id\" in struct %s", structName)
@@ -225,10 +290,27 @@ func main() {
 		initiate.WriteString("\t}\n")
 		initiate.WriteString("}\n\n")
 
+		// initiate from key
+		initiate.WriteString("func New" + metricName + "FromKey(store stream_core.KeyStore, mkey string) (*" + metricName + ", error) {\n")
+		initiate.WriteString(initbodyKey.String() + "\n")
+		initiate.WriteString("\treturn &Metric" + ts.Name.Name + "{\n")
+		initiate.WriteString("\t\tstore: store,\n")
+		initiate.WriteString(initstruct.String())
+		initiate.WriteString("\t}, nil\n")
+		initiate.WriteString("}\n\n")
+
+		// is that struct
+		var isThatStruct strings.Builder
+		isThatStruct.WriteString("func Is" + metricName + "(key string) bool {\n")
+		indexPathStr := strings.Join(indexPaths, "_")
+		isThatStruct.WriteString("\treturn strings.HasPrefix(key, \"" + indexPathStr + "/\")\n")
+		isThatStruct.WriteString("}\n\n")
+
 		// writing struct
 		wfile.WriteString(structDec.String())
 		// writing initiate new
 		wfile.WriteString(initiate.String())
+		wfile.WriteString(isThatStruct.String())
 		// writing counter
 		wfile.WriteString(counterFuncs.String())
 		// writing data function
@@ -279,4 +361,19 @@ func CamelToSnake(s string) string {
 		}
 	}
 	return string(out)
+}
+
+func packagePathFromFile(filename string) (string, error) {
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles,
+	}
+
+	pkgs, err := packages.Load(cfg, "file="+filename)
+	if err != nil {
+		return "", err
+	}
+	if len(pkgs) == 0 {
+		return "", fmt.Errorf("no package found")
+	}
+	return pkgs[0].PkgPath, nil
 }

@@ -59,6 +59,36 @@ type HashMapCounter struct {
 	keyCount     uint64
 }
 
+// IncFloat64 implements KeyStore.
+func (hm *HashMapCounter) IncFloat64(key string, delta float64) float64 {
+	panic("cannot update outside transaction")
+}
+
+// IncInt64 implements KeyStore.
+func (hm *HashMapCounter) IncInt64(key string, delta int64) int64 {
+	panic("cannot update outside transaction")
+}
+
+// IncUint64 implements KeyStore.
+func (hm *HashMapCounter) IncUint64(key string, delta uint64) uint64 {
+	panic("cannot update outside transaction")
+}
+
+// PutFloat64 implements KeyStore.
+func (hm *HashMapCounter) PutFloat64(key string, value float64) float64 {
+	panic("cannot update outside transaction")
+}
+
+// PutInt64 implements KeyStore.
+func (hm *HashMapCounter) PutInt64(key string, value int64) int64 {
+	panic("cannot update outside transaction")
+}
+
+// PutUint64 implements KeyStore.
+func (hm *HashMapCounter) PutUint64(key string, value uint64) uint64 {
+	panic("cannot update outside transaction")
+}
+
 func NewHashMapCounter(cfg *CoreConfig) (*HashMapCounter, error) {
 	size := int(cfg.HashMapCounterSlots*HASHMAP_SLOT_SIZE) + HASHMAP_METADATA_SIZE
 

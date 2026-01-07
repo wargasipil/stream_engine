@@ -1,4 +1,4 @@
-package stream_schema
+package example
 
 //go:generate metric_generate
 
@@ -6,7 +6,17 @@ type Example struct {
 	ID       uint64 `metric:"id"`
 	TeamID   uint64 `metric:"index"`
 	UserID   uint64 `metric:"index"`
-	Shopname string `metric:"index"`
+	ShopName string `metric:"index"`
+
+	LastBalance     float64
+	ProductCount    int64
+	StockCount      uint64
+	ReadyStockCount uint64
+}
+
+type ExampleTeam struct {
+	ID     uint64 `metric:"id"`
+	TeamID uint64 `metric:"index"`
 
 	LastBalance     float64
 	ProductCount    int64
