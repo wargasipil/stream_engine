@@ -296,7 +296,7 @@ func main() {
 		initiate.WriteString("\treturn &Metric" + ts.Name.Name + "{\n")
 		initiate.WriteString("\t\tstore: store,\n")
 		initiate.WriteString(initstruct.String())
-		initiate.WriteString("\t}, nil\n")
+		initiate.WriteString("\t}, err\n")
 		initiate.WriteString("}\n\n")
 
 		// is that struct

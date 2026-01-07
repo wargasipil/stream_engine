@@ -50,6 +50,8 @@ func main() {
 		return nil
 	})
 
+	log.Println(example.IsMetricExampleTeam("team/4/log"))
+
 	metrict, err := example.NewMetricExampleTeamFromKey(kv, "team/4/log")
 	if err != nil {
 		panic(err)

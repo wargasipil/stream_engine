@@ -12,8 +12,8 @@ import (
 // jangan DIEDIT, file ini generate an dari package github.com/wargasipil/stream_engine
 
 type MetricExample struct {
-	key   string
-	Name  string
+	key string
+	Name string
 	store stream_core.KeyStore
 
 	// Jangan Diubah letterlek
@@ -37,11 +37,11 @@ func NewMetricExample(store stream_core.KeyStore, TeamID uint64, UserID uint64, 
 	Name := strings.Join(names, "_")
 
 	return &MetricExample{
-		store:    store,
-		Name:     Name,
-		key:      key,
-		TeamID:   TeamID,
-		UserID:   UserID,
+		store: store,
+		Name: Name,
+		key: key,
+		TeamID: TeamID,
+		UserID: UserID,
 		ShopName: ShopName,
 	}
 }
@@ -76,13 +76,13 @@ func NewMetricExampleFromKey(store stream_core.KeyStore, mkey string) (*MetricEx
 	var ShopName string = indexkeys[2]
 
 	return &MetricExample{
-		store:    store,
-		Name:     Name,
-		key:      key,
-		TeamID:   TeamID,
-		UserID:   UserID,
+		store: store,
+		Name: Name,
+		key: key,
+		TeamID: TeamID,
+		UserID: UserID,
 		ShopName: ShopName,
-	}, nil
+	}, err
 }
 
 func IsMetricExample(key string) bool {
@@ -90,11 +90,11 @@ func IsMetricExample(key string) bool {
 }
 
 func (m *MetricExample) PutLastBalance(value float64) float64 {
-	return m.store.PutFloat64(m.key+"/last_balance", value)
+	return m.store.PutFloat64(m.key + "/last_balance", value)
 }
 
 func (m *MetricExample) IncLastBalance(value float64) float64 {
-	return m.store.IncFloat64(m.key+"/last_balance", value)
+	return m.store.IncFloat64(m.key + "/last_balance", value)
 }
 
 func (m *MetricExample) GetLastBalance() float64 {
@@ -102,11 +102,11 @@ func (m *MetricExample) GetLastBalance() float64 {
 }
 
 func (m *MetricExample) PutProductCount(value int64) int64 {
-	return m.store.PutInt64(m.key+"/product_count", value)
+	return m.store.PutInt64(m.key + "/product_count", value)
 }
 
 func (m *MetricExample) IncProductCount(value int64) int64 {
-	return m.store.IncInt64(m.key+"/product_count", value)
+	return m.store.IncInt64(m.key + "/product_count", value)
 }
 
 func (m *MetricExample) GetProductCount() int64 {
@@ -114,11 +114,11 @@ func (m *MetricExample) GetProductCount() int64 {
 }
 
 func (m *MetricExample) PutStockCount(value uint64) uint64 {
-	return m.store.PutUint64(m.key+"/stock_count", value)
+	return m.store.PutUint64(m.key + "/stock_count", value)
 }
 
 func (m *MetricExample) IncStockCount(value uint64) uint64 {
-	return m.store.IncUint64(m.key+"/stock_count", value)
+	return m.store.IncUint64(m.key + "/stock_count", value)
 }
 
 func (m *MetricExample) GetStockCount() uint64 {
@@ -126,11 +126,11 @@ func (m *MetricExample) GetStockCount() uint64 {
 }
 
 func (m *MetricExample) PutReadyStockCount(value uint64) uint64 {
-	return m.store.PutUint64(m.key+"/ready_stock_count", value)
+	return m.store.PutUint64(m.key + "/ready_stock_count", value)
 }
 
 func (m *MetricExample) IncReadyStockCount(value uint64) uint64 {
-	return m.store.IncUint64(m.key+"/ready_stock_count", value)
+	return m.store.IncUint64(m.key + "/ready_stock_count", value)
 }
 
 func (m *MetricExample) GetReadyStockCount() uint64 {
@@ -143,33 +143,33 @@ func (m *MetricExample) GetKey() string {
 
 func (m *MetricExample) Values() map[string]any {
 	return map[string]any{
-		"ID":              stream_core.HashKeyString(m.key),
-		"TeamID":          m.TeamID,
-		"UserID":          m.UserID,
-		"ShopName":        m.ShopName,
-		"LastBalance":     m.GetLastBalance(),
-		"ProductCount":    m.GetProductCount(),
-		"StockCount":      m.GetStockCount(),
+		"ID": stream_core.HashKeyString(m.key),
+		"TeamID": m.TeamID,
+		"UserID": m.UserID,
+		"ShopName": m.ShopName,
+		"LastBalance": m.GetLastBalance(),
+		"ProductCount": m.GetProductCount(),
+		"StockCount": m.GetStockCount(),
 		"ReadyStockCount": m.GetReadyStockCount(),
 	}
 }
 
 func (m *MetricExample) Data() *Example {
 	return &Example{
-		ID:              stream_core.HashKeyString(m.key),
-		TeamID:          m.TeamID,
-		UserID:          m.UserID,
-		ShopName:        m.ShopName,
-		LastBalance:     m.GetLastBalance(),
-		ProductCount:    m.GetProductCount(),
-		StockCount:      m.GetStockCount(),
+		ID: stream_core.HashKeyString(m.key),
+		TeamID: m.TeamID,
+		UserID: m.UserID,
+		ShopName: m.ShopName,
+		LastBalance: m.GetLastBalance(),
+		ProductCount: m.GetProductCount(),
+		StockCount: m.GetStockCount(),
 		ReadyStockCount: m.GetReadyStockCount(),
 	}
 }
 
 type MetricExampleTeam struct {
-	key   string
-	Name  string
+	key string
+	Name string
 	store stream_core.KeyStore
 
 	// Jangan Diubah letterlek
@@ -185,9 +185,9 @@ func NewMetricExampleTeam(store stream_core.KeyStore, TeamID uint64) *MetricExam
 	Name := strings.Join(names, "_")
 
 	return &MetricExampleTeam{
-		store:  store,
-		Name:   Name,
-		key:    key,
+		store: store,
+		Name: Name,
+		key: key,
 		TeamID: TeamID,
 	}
 }
@@ -215,11 +215,11 @@ func NewMetricExampleTeamFromKey(store stream_core.KeyStore, mkey string) (*Metr
 	}
 
 	return &MetricExampleTeam{
-		store:  store,
-		Name:   Name,
-		key:    key,
+		store: store,
+		Name: Name,
+		key: key,
 		TeamID: TeamID,
-	}, nil
+	}, err
 }
 
 func IsMetricExampleTeam(key string) bool {
@@ -227,11 +227,11 @@ func IsMetricExampleTeam(key string) bool {
 }
 
 func (m *MetricExampleTeam) PutLastBalance(value float64) float64 {
-	return m.store.PutFloat64(m.key+"/last_balance", value)
+	return m.store.PutFloat64(m.key + "/last_balance", value)
 }
 
 func (m *MetricExampleTeam) IncLastBalance(value float64) float64 {
-	return m.store.IncFloat64(m.key+"/last_balance", value)
+	return m.store.IncFloat64(m.key + "/last_balance", value)
 }
 
 func (m *MetricExampleTeam) GetLastBalance() float64 {
@@ -239,11 +239,11 @@ func (m *MetricExampleTeam) GetLastBalance() float64 {
 }
 
 func (m *MetricExampleTeam) PutProductCount(value int64) int64 {
-	return m.store.PutInt64(m.key+"/product_count", value)
+	return m.store.PutInt64(m.key + "/product_count", value)
 }
 
 func (m *MetricExampleTeam) IncProductCount(value int64) int64 {
-	return m.store.IncInt64(m.key+"/product_count", value)
+	return m.store.IncInt64(m.key + "/product_count", value)
 }
 
 func (m *MetricExampleTeam) GetProductCount() int64 {
@@ -251,11 +251,11 @@ func (m *MetricExampleTeam) GetProductCount() int64 {
 }
 
 func (m *MetricExampleTeam) PutStockCount(value uint64) uint64 {
-	return m.store.PutUint64(m.key+"/stock_count", value)
+	return m.store.PutUint64(m.key + "/stock_count", value)
 }
 
 func (m *MetricExampleTeam) IncStockCount(value uint64) uint64 {
-	return m.store.IncUint64(m.key+"/stock_count", value)
+	return m.store.IncUint64(m.key + "/stock_count", value)
 }
 
 func (m *MetricExampleTeam) GetStockCount() uint64 {
@@ -263,11 +263,11 @@ func (m *MetricExampleTeam) GetStockCount() uint64 {
 }
 
 func (m *MetricExampleTeam) PutReadyStockCount(value uint64) uint64 {
-	return m.store.PutUint64(m.key+"/ready_stock_count", value)
+	return m.store.PutUint64(m.key + "/ready_stock_count", value)
 }
 
 func (m *MetricExampleTeam) IncReadyStockCount(value uint64) uint64 {
-	return m.store.IncUint64(m.key+"/ready_stock_count", value)
+	return m.store.IncUint64(m.key + "/ready_stock_count", value)
 }
 
 func (m *MetricExampleTeam) GetReadyStockCount() uint64 {
@@ -280,22 +280,151 @@ func (m *MetricExampleTeam) GetKey() string {
 
 func (m *MetricExampleTeam) Values() map[string]any {
 	return map[string]any{
-		"ID":              stream_core.HashKeyString(m.key),
-		"TeamID":          m.TeamID,
-		"LastBalance":     m.GetLastBalance(),
-		"ProductCount":    m.GetProductCount(),
-		"StockCount":      m.GetStockCount(),
+		"ID": stream_core.HashKeyString(m.key),
+		"TeamID": m.TeamID,
+		"LastBalance": m.GetLastBalance(),
+		"ProductCount": m.GetProductCount(),
+		"StockCount": m.GetStockCount(),
 		"ReadyStockCount": m.GetReadyStockCount(),
 	}
 }
 
 func (m *MetricExampleTeam) Data() *ExampleTeam {
 	return &ExampleTeam{
-		ID:              stream_core.HashKeyString(m.key),
-		TeamID:          m.TeamID,
-		LastBalance:     m.GetLastBalance(),
-		ProductCount:    m.GetProductCount(),
-		StockCount:      m.GetStockCount(),
+		ID: stream_core.HashKeyString(m.key),
+		TeamID: m.TeamID,
+		LastBalance: m.GetLastBalance(),
+		ProductCount: m.GetProductCount(),
+		StockCount: m.GetStockCount(),
 		ReadyStockCount: m.GetReadyStockCount(),
 	}
 }
+
+type MetricAllAccount struct {
+	key string
+	Name string
+	store stream_core.KeyStore
+
+	// Jangan Diubah letterlek
+	AccountID string
+}
+
+func NewMetricAllAccount(store stream_core.KeyStore, AccountID string) *MetricAllAccount {
+	keys := []string{}
+	names := []string{}
+	keys = append(keys, fmt.Sprintf("%s", AccountID))
+	names = append(names, "account")
+	key := fmt.Sprintf("%s/%s", strings.Join(names, "_"), strings.Join(keys, "/"))
+	Name := strings.Join(names, "_")
+
+	return &MetricAllAccount{
+		store: store,
+		Name: Name,
+		key: key,
+		AccountID: AccountID,
+	}
+}
+
+func NewMetricAllAccountFromKey(store stream_core.KeyStore, mkey string) (*MetricAllAccount, error) {
+
+	var err error
+
+	keys := strings.Split(mkey, "/")
+	if len(keys) <= 2 {
+		return nil, errors.New("key invalid")
+	}
+	Name := keys[0]
+	names := strings.Split(Name, "_")
+	indexkeys := keys[1:]
+	key := Name + "/" + strings.Join(indexkeys[:len(names)], "/")
+	if len(indexkeys) <= 1 {
+		return nil, errors.New("index on key invalid")
+	}
+	var AccountID string = indexkeys[0]
+
+	return &MetricAllAccount{
+		store: store,
+		Name: Name,
+		key: key,
+		AccountID: AccountID,
+	}, err
+}
+
+func IsMetricAllAccount(key string) bool {
+	return strings.HasPrefix(key, "account/")
+}
+
+func (m *MetricAllAccount) PutLastBalance(value float64) float64 {
+	return m.store.PutFloat64(m.key + "/last_balance", value)
+}
+
+func (m *MetricAllAccount) IncLastBalance(value float64) float64 {
+	return m.store.IncFloat64(m.key + "/last_balance", value)
+}
+
+func (m *MetricAllAccount) GetLastBalance() float64 {
+	return m.store.GetFloat64(m.key + "/last_balance")
+}
+
+func (m *MetricAllAccount) PutProductCount(value int64) int64 {
+	return m.store.PutInt64(m.key + "/product_count", value)
+}
+
+func (m *MetricAllAccount) IncProductCount(value int64) int64 {
+	return m.store.IncInt64(m.key + "/product_count", value)
+}
+
+func (m *MetricAllAccount) GetProductCount() int64 {
+	return m.store.GetInt64(m.key + "/product_count")
+}
+
+func (m *MetricAllAccount) PutStockCount(value uint64) uint64 {
+	return m.store.PutUint64(m.key + "/stock_count", value)
+}
+
+func (m *MetricAllAccount) IncStockCount(value uint64) uint64 {
+	return m.store.IncUint64(m.key + "/stock_count", value)
+}
+
+func (m *MetricAllAccount) GetStockCount() uint64 {
+	return m.store.GetUint64(m.key + "/stock_count")
+}
+
+func (m *MetricAllAccount) PutReadyStockCount(value uint64) uint64 {
+	return m.store.PutUint64(m.key + "/ready_stock_count", value)
+}
+
+func (m *MetricAllAccount) IncReadyStockCount(value uint64) uint64 {
+	return m.store.IncUint64(m.key + "/ready_stock_count", value)
+}
+
+func (m *MetricAllAccount) GetReadyStockCount() uint64 {
+	return m.store.GetUint64(m.key + "/ready_stock_count")
+}
+
+func (m *MetricAllAccount) GetKey() string {
+	return m.key
+}
+
+func (m *MetricAllAccount) Values() map[string]any {
+	return map[string]any{
+		"ID": stream_core.HashKeyString(m.key),
+		"AccountID": m.AccountID,
+		"LastBalance": m.GetLastBalance(),
+		"ProductCount": m.GetProductCount(),
+		"StockCount": m.GetStockCount(),
+		"ReadyStockCount": m.GetReadyStockCount(),
+	}
+}
+
+func (m *MetricAllAccount) Data() *AllAccount {
+	return &AllAccount{
+		ID: stream_core.HashKeyString(m.key),
+		AccountID: m.AccountID,
+		LastBalance: m.GetLastBalance(),
+		ProductCount: m.GetProductCount(),
+		StockCount: m.GetStockCount(),
+		ReadyStockCount: m.GetReadyStockCount(),
+	}
+}
+

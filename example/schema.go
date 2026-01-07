@@ -23,3 +23,13 @@ type ExampleTeam struct {
 	StockCount      uint64
 	ReadyStockCount uint64
 }
+
+type AllAccount struct {
+	ID        uint64 `metric:"id"`
+	AccountID string `metric:"index"`
+
+	LastBalance     float64
+	ProductCount    int64
+	StockCount      uint64
+	ReadyStockCount uint64
+}
