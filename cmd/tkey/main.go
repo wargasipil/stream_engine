@@ -19,13 +19,14 @@ func main() {
 	// kv.ResetCounter()
 
 	kv.Transaction(func(tx *stream_core.Transaction) error {
-		metric := stream_schema.NewMetricUserTeam(tx, 1, 30)
+		metric := stream_schema.NewMetricExample(tx, 1, 30, "tokosaya")
 		for i := 0; i < 100; i++ {
-			metric.IncCredit(123)
+			metric.IncStockCount(123)
 			metric.PutLastBalance(12000.6)
 		}
+		log.Println(metric.Data())
+		log.Println(metric.Values(), metric.Name, metric.GetLastBalance(), metric.GetStockCount())
 
-		log.Println(metric.GetKey(), metric.Name, metric.GetLastBalance(), metric.GetCredit())
 		return nil
 	})
 

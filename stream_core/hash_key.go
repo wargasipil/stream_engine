@@ -17,3 +17,8 @@ func (hs *hashKey) hashByte(data []byte) int64 {
 	slot := h & (hs.cfg.HashMapCounterSlots - 1)
 	return int64(slot * HASHMAP_SLOT_SIZE)
 }
+
+func HashKeyString(key string) uint64 {
+	h := xxhash.Sum64String(key)
+	return h
+}
