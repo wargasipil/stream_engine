@@ -3,7 +3,7 @@ package main
 //go:generate metric_generate
 
 type TeamAccount struct {
-	ID         uint64 `metric:"id" json:"id"`
+	ID         int64  `metric:"id" json:"id"`
 	TeamID     uint64 `metric:"index" json:"team_id"`
 	AccountKey string `metric:"index" json:"account_key"`
 

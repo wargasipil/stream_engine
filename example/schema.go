@@ -3,7 +3,7 @@ package example
 //go:generate metric_generate
 
 type Example struct {
-	ID       uint64 `metric:"id"`
+	ID       int64  `metric:"id"`
 	TeamID   uint64 `metric:"index"`
 	UserID   uint64 `metric:"index"`
 	ShopName string `metric:"index"`
@@ -15,7 +15,7 @@ type Example struct {
 }
 
 type ExampleTeam struct {
-	ID     uint64 `metric:"id"`
+	ID     int64  `metric:"id"`
 	TeamID uint64 `metric:"index"`
 
 	LastBalance     float64
@@ -25,7 +25,7 @@ type ExampleTeam struct {
 }
 
 type AllAccount struct {
-	ID        uint64 `metric:"id"`
+	ID        int64  `metric:"id"`
 	AccountID string `metric:"index"`
 
 	LastBalance     float64

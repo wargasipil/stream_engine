@@ -233,6 +233,9 @@ func main() {
 		}
 
 		var datastructfunc strings.Builder
+		var anydatafunc strings.Builder
+
+		// function getting key
 
 		counterFuncs.WriteString("func (m *" + metricName + ") GetKey() string {\n")
 		counterFuncs.WriteString("\treturn m.key\n")
@@ -240,6 +243,8 @@ func main() {
 		// function getting data struct
 		datastructfunc.WriteString("func (m *" + metricName + ") Data() *" + structName + " {\n")
 		datastructfunc.WriteString("\treturn &" + structName + "{\n")
+		anydatafunc.WriteString("func (m *" + metricName + ") Any() any {\n")
+		anydatafunc.WriteString("\treturn &" + structName + "{\n")
 
 		// function getting value
 		counterFuncs.WriteString("func (m *" + metricName + ") Values() map[string]any {\n")
@@ -249,21 +254,26 @@ func main() {
 			if name == idfield {
 				counterFuncs.WriteString("\t\t\"" + name + "\": stream_core.HashKeyString(m.key),\n")
 				datastructfunc.WriteString("\t\t" + name + ": stream_core.HashKeyString(m.key),\n")
+				anydatafunc.WriteString("\t\t" + name + ": stream_core.HashKeyString(m.key),\n")
 				continue
 			}
 
 			if mapIndex[name] {
 				counterFuncs.WriteString("\t\t\"" + name + "\": m." + name + ",\n")
 				datastructfunc.WriteString("\t\t" + name + ": m." + name + ",\n")
+				anydatafunc.WriteString("\t\t" + name + ": m." + name + ",\n")
 			} else {
 				counterFuncs.WriteString("\t\t\"" + name + "\": m.Get" + name + "(),\n")
 				datastructfunc.WriteString("\t\t" + name + ": m.Get" + name + "(),\n")
+				anydatafunc.WriteString("\t\t" + name + ": m.Get" + name + "(),\n")
 			}
 		}
 
 		counterFuncs.WriteString("\t}\n")
 		counterFuncs.WriteString("}\n\n")
 
+		anydatafunc.WriteString("\t}\n")
+		anydatafunc.WriteString("}\n\n")
 		datastructfunc.WriteString("\t}\n")
 		datastructfunc.WriteString("}\n\n")
 
@@ -315,6 +325,8 @@ func main() {
 		wfile.WriteString(counterFuncs.String())
 		// writing data function
 		wfile.WriteString(datastructfunc.String())
+		// writing data any
+		wfile.WriteString(anydatafunc.String())
 
 		return false
 	})

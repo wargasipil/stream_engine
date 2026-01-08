@@ -70,7 +70,7 @@ func NewMetricTeamAccountFromKey(store stream_core.KeyStore, mkey string) (*Metr
 		key: key,
 		TeamID: TeamID,
 		AccountKey: AccountKey,
-	}, nil
+	}, err
 }
 
 func IsMetricTeamAccount(key string) bool {
