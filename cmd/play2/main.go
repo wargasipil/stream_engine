@@ -15,5 +15,5 @@ func main() {
 	defer tree.Close()
 
 	tree.Insert("slow", 200)
-	tree.Insert("user/asdasd/team1", 200)
+	tree.Insert("user/asdasd/team6", 200)
 }

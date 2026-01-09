@@ -1,9 +1,11 @@
 package stream_core
 
 import (
+	"bytes"
 	"encoding/binary"
 	"log"
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/edsrzf/mmap-go"
@@ -13,15 +15,15 @@ import (
 FILE STRUCTURE
 
 [ Metadata Database ]
-| Magic (8 bytes) | PagesCount ( 8 bytes ) |
+| Magic (8 bytes) | PagesCount ( 8 bytes ) | FileSize ( 8 bytes )
 
 [ File Pages ]
 
 
 PAGES STRUCTURE
 
-| pageType (1 byte) | keyCount (2 byte / 16bit) | page size (2 byte / 16 bit) 	| repeated key value 										|
-																				| key_len (2 byte / 16 bit) | value uint64 (8 byte / 64bit) |
+|	pageType (1 byte)	|	keyCount (2 byte / 16bit)	|	page size (2 byte / 16 bit)	|	nextOffset	(8 byte / 64bit)	| repeated key value 										|
+																						| 	key_len (2 byte / 16 bit) 		| value uint64 (8 byte / 64bit) |
 
 */
 
@@ -29,8 +31,8 @@ var Magic = [8]byte{0x53, 0x61, 0x6e, 0x74, 0x6f, 0x73, 0x6f, 0x20}
 
 const (
 	PageSize         = 4096 // 16,384 = 16kb / 4096 = 4kb / 1024 = kilo
-	PageMetadataSize = 5
-	BeeMetadataSize  = 16
+	PageMetadataSize = 13
+	BeeMetadataSize  = 32
 )
 
 const (
@@ -123,6 +125,8 @@ func (l *leafEntry) size() int16 {
 	return int16(len(l.key)) + 2 + 8 // 2 is keylen and 8 is uint64 size
 }
 
+// --------------------------- bagian btree --------------------------
+
 type BeeTree struct {
 	f    *os.File
 	lock sync.Mutex
@@ -165,7 +169,7 @@ func NewBeeTree(fname string) (*BeeTree, error) {
 	}
 
 	if isCreateMeta {
-		bee.createMetadata()
+		bee.createMetadata(PageSize * 1024)
 	}
 
 	return bee, nil
@@ -188,16 +192,59 @@ func (d *BeeTree) Close() error {
 	return err
 }
 
-func (t *BeeTree) createMetadata() {
+func (t *BeeTree) fileSise() uint64 {
+	return binary.LittleEndian.Uint64(t.data[16:32])
+}
+
+func (t *BeeTree) pageCount() uint64 {
+	return binary.LittleEndian.Uint64(t.data[8:16])
+}
+
+func (t *BeeTree) increaseSize() {
+	err := t.data.Flush()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = t.data.Unmap()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fileSize := t.fileSise() * 2
+	binary.LittleEndian.PutUint64(t.data[16:32], fileSize)
+	err = t.f.Truncate(int64(fileSize))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	t.data, err = mmap.Map(t.f, mmap.RDWR, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (t *BeeTree) createMetadata(fsize uint64) {
 	// set magic file
 	copy(t.data[:8], Magic[:])
 	// set initial pages count
 	binary.LittleEndian.PutUint64(t.data[8:16], 1)
+	// set filesize
+	binary.LittleEndian.PutUint64(t.data[16:32], fsize)
+	// set
 	var page relOffset = BeeMetadataSize
 	t.data[page.Offset(0)] = pageLeaf
 }
 
 func (t *BeeTree) insert(pageId int, key []byte, val uint64) ([]byte, uint64, bool) {
+	leaf := leafEntry{
+		key: key,
+		val: val,
+	}
+
+	// checking jika filesize kurang besar harus tumbuh
+	if (t.pageCount()*PageSize + uint64(leaf.size())) >= t.fileSise() {
+		t.increaseSize()
+	}
 
 	page := bpage{
 		offset: (pageId * PageSize) + BeeMetadataSize,
@@ -205,26 +252,33 @@ func (t *BeeTree) insert(pageId int, key []byte, val uint64) ([]byte, uint64, bo
 	}
 
 	if page.pageType() == pageLeaf {
-		leaf := leafEntry{
-			key: key,
-			val: val,
-		}
+
+		entries := page.getLeafEntry()
+		keyCount := page.keyCount()
+		i := sort.Search(int(page.keyCount()), func(i int) bool {
+			return bytes.Compare(entries[i].key, key) >= 0
+		})
 
 		// jika size cukup
 		if (page.pageSize() + leaf.size()) < PageSize {
-			entries := page.getLeafEntry()
-			entries = append(entries, leaf)
+			if i == int(keyCount) { // jika key tidak ada
+				entries = append(entries, leaf)
+				// set key count
+			} else {
+				entries[i].val = val
+			}
+
 			// tulis leaf
 			page.writeLeafEntry(entries)
-
-			log.Println(page.bytes())
+			log.Println(page.keyCount(), "keycount")
 			log.Println(page.getLeafEntry())
 		}
 
+		// jika size tidak cukup
+
 	}
 
-	// keyCount := binary.LittleEndian.Uint16(page[1:])
-	log.Println(page.pageType())
+	panic("internal page not implemented")
 
 	return []byte{}, 0, false
 
