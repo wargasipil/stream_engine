@@ -1,35 +1,134 @@
 package stream_core
 
 import (
-	"bytes"
 	"encoding/binary"
+	"log"
 	"os"
-	"sort"
 	"sync"
 
 	"github.com/edsrzf/mmap-go"
 )
 
+/*
+FILE STRUCTURE
+
+[ Metadata Database ]
+| Magic (8 bytes) | PagesCount ( 8 bytes ) |
+
+[ File Pages ]
+
+
+PAGES STRUCTURE
+
+| pageType (1 byte) | keyCount (2 byte / 16bit) | page size (2 byte / 16 bit) 	| repeated key value 										|
+																				| key_len (2 byte / 16 bit) | value uint64 (8 byte / 64bit) |
+
+*/
+
+var Magic = [8]byte{0x53, 0x61, 0x6e, 0x74, 0x6f, 0x73, 0x6f, 0x20}
+
 const (
-	PageSize = 4096
-	Degree   = 64
+	PageSize         = 4096 // 16,384 = 16kb / 4096 = 4kb / 1024 = kilo
+	PageMetadataSize = 5
+	BeeMetadataSize  = 16
 )
 
 const (
-	pageLeaf uint8 = 1
-	pageInt  uint8 = 2
+	pageUnknown = iota
+	pageLeaf
+	pageInternal
 )
+
+type relOffset int
+
+func (r relOffset) Offset(off int) int {
+	return int(r) + off
+}
+
+type bpage struct {
+	offset int
+	data   []byte
+}
+
+func (p *bpage) bytes() []byte {
+	return p.data[p.offset : p.offset+PageSize]
+}
+
+func (p *bpage) keyCount() int16 {
+	return int16(binary.LittleEndian.Uint16(p.data[p.offset+1 : p.offset+3]))
+}
+
+func (p *bpage) pageSize() int16 {
+	return int16(binary.LittleEndian.Uint16(p.data[p.offset+3 : p.offset+5]))
+}
+
+func (p *bpage) pageType() int8 {
+	return int8(p.data[p.offset])
+}
+
+func (p *bpage) getLeafEntry() []leafEntry {
+	cnt := p.keyCount()
+	res := []leafEntry{}
+
+	var c int16 = 0
+	var klen int16
+	off := p.offset + PageMetadataSize
+	for c < cnt {
+		klen = int16(binary.LittleEndian.Uint16(p.data[off : off+2]))
+		leaf := leafEntry{
+			key: make([]byte, klen),
+			val: binary.LittleEndian.Uint64(p.data[off+2+int(klen) : off+2+int(klen)+8]),
+		}
+		copy(leaf.key, p.data[off+2:off+2+int(klen)])
+		res = append(res, leaf)
+		off += int(leaf.size())
+		c++
+	}
+	return res
+}
+
+func (p *bpage) writeLeafEntry(entries []leafEntry) {
+	// set page key count
+	var entryCount int16 = int16(len(entries))
+	binary.LittleEndian.PutUint16(p.data[p.offset+1:p.offset+3], uint16(entryCount))
+
+	// set data
+	off := p.offset + PageMetadataSize
+	for _, entry := range entries {
+		copy(p.data[off:], entry.data())
+		off += int(entry.size())
+	}
+
+	// set page size
+	pagesize := off - p.offset
+	binary.LittleEndian.PutUint16(p.data[p.offset+3:p.offset+5], uint16(pagesize))
+}
 
 type leafEntry struct {
-	key   []byte
-	value uint64
+	key []byte
+	val uint64
+}
+
+func (l *leafEntry) data() []byte {
+	data := make([]byte, l.size())
+	// set keylen
+	klen := int16(len(l.key))
+	binary.LittleEndian.PutUint16(data[:2], uint16(klen))
+	copy(data[2:], l.key)
+	binary.LittleEndian.PutUint64(data[2+klen:2+klen+8], l.val)
+	return data
+}
+
+func (l *leafEntry) size() int16 {
+	return int16(len(l.key)) + 2 + 8 // 2 is keylen and 8 is uint64 size
 }
 
 type BeeTree struct {
 	f    *os.File
 	lock sync.Mutex
-	root uint64
 	data mmap.MMap
+
+	root uint64
 }
 
 func NewBeeTree(fname string) (*BeeTree, error) {
@@ -44,10 +143,13 @@ func NewBeeTree(fname string) (*BeeTree, error) {
 	}
 
 	size := info.Size()
+	var isCreateMeta bool
 	if size == 0 {
+		isCreateMeta = true
 		if err := f.Truncate(PageSize * 1024); err != nil {
 			return nil, err
 		}
+
 	}
 
 	m, err := mmap.Map(f, mmap.RDWR, 0)
@@ -55,127 +157,18 @@ func NewBeeTree(fname string) (*BeeTree, error) {
 		return nil, err
 	}
 
-	return &BeeTree{
+	bee := &BeeTree{
 		f,
 		sync.Mutex{},
-		0,
 		m,
-	}, nil
-}
-
-func (t *BeeTree) page(id uint64) []byte {
-	return t.data[id*PageSize : (id+1)*PageSize]
-}
-
-func (t *BeeTree) fitsLeaf(e []leafEntry) bool {
-	size := 11
-	for _, x := range e {
-		size += 2 + len(x.key) + 8
-	}
-	return size <= PageSize
-}
-
-func (t *BeeTree) writeLeaf(p []byte, e []leafEntry) {
-	binary.LittleEndian.PutUint16(p[1:], uint16(len(e)))
-	off := 11
-	for _, x := range e {
-		binary.LittleEndian.PutUint16(p[off:], uint16(len(x.key)))
-		off += 2
-		copy(p[off:], x.key)
-		off += len(x.key)
-		binary.LittleEndian.PutUint64(p[off:], x.value)
-		off += 8
-	}
-}
-
-func (t *BeeTree) readLeafEntries(p []byte, cnt int) []leafEntry {
-	off := 11
-	out := make([]leafEntry, 0, cnt)
-	for i := 0; i < cnt; i++ {
-		klen := int(binary.LittleEndian.Uint16(p[off:]))
-		off += 2
-		k := append([]byte{}, p[off:off+klen]...)
-		off += klen
-		v := binary.LittleEndian.Uint64(p[off:])
-		off += 8
-		out = append(out, leafEntry{k, v})
-	}
-	return out
-}
-
-func (t *BeeTree) Insert(key []byte, value uint64) {
-	t.insert(t.root, key, value)
-	// promo, right, split := t.insert(t.root, key, value)
-	// if split {
-	// 	newRoot := t.allocInt()
-	// 	p := t.page(newRoot)
-	// 	binary.LittleEndian.PutUint16(p[1:], 1)
-	// 	off := 11
-	// 	binary.LittleEndian.PutUint16(p[off:], uint16(len(promo)))
-	// 	off += 2
-	// 	copy(p[off:], promo)
-	// 	off += len(promo)
-	// 	binary.LittleEndian.PutUint64(p[off:], right)
-	// 	t.root = newRoot
-	// }
-}
-
-func (t *BeeTree) insert(pid uint64, key []byte, value uint64) ([]byte, uint64, bool) {
-	p := t.page(pid)
-	cnt := int(binary.LittleEndian.Uint16(p[1:]))
-
-	off := 11
-
-	if p[0] == pageLeaf {
-		entries := t.readLeafEntries(p, cnt)
-		entries = append(entries, leafEntry{key, value})
-		sort.Slice(entries, func(i, j int) bool { return bytes.Compare(entries[i].key, entries[j].key) < 0 })
-
-		if t.fitsLeaf(entries) {
-			t.writeLeaf(p, entries)
-			return nil, 0, false
-		}
-
-		mid := len(entries) / 2
-		left := entries[:mid]
-		rightEntries := entries[mid:]
-
-		rightPid := t.allocLeaf()
-		writeLeaf(p, left)
-		writeLeaf(t.page(rightPid), rightEntries)
-
-		binary.LittleEndian.PutUint64(t.page(rightPid)[3:], binary.LittleEndian.Uint64(p[3:]))
-		binary.LittleEndian.PutUint64(p[3:], rightPid)
-
-		return rightEntries[0].key, rightPid, true
+		0,
 	}
 
-	// internal node
-	children := readIntEntries(p, cnt)
-	idx := 0
-	for idx < len(children) && bytes.Compare(key, children[idx].key) >= 0 {
-		idx++
+	if isCreateMeta {
+		bee.createMetadata()
 	}
 
-	promo, rightChild, split := t.insertRec(children[idx].child, key, value)
-	if !split {
-		return nil, 0, false
-	}
-
-	children = insertInt(children, idx, promo, rightChild)
-	if fitsInt(children) {
-		writeInt(p, children)
-		return nil, 0, false
-	}
-
-	mid := len(children) / 2
-	promoKey := children[mid].key
-
-	rightPid := t.allocInt()
-	writeInt(p, children[:mid])
-	writeInt(t.page(rightPid), children[mid+1:])
-
-	return promoKey, rightPid, true
+	return bee, nil
 }
 
 func (d *BeeTree) Close() error {
@@ -193,4 +186,50 @@ func (d *BeeTree) Close() error {
 
 	err = d.f.Close()
 	return err
+}
+
+func (t *BeeTree) createMetadata() {
+	// set magic file
+	copy(t.data[:8], Magic[:])
+	// set initial pages count
+	binary.LittleEndian.PutUint64(t.data[8:16], 1)
+	var page relOffset = BeeMetadataSize
+	t.data[page.Offset(0)] = pageLeaf
+}
+
+func (t *BeeTree) insert(pageId int, key []byte, val uint64) ([]byte, uint64, bool) {
+
+	page := bpage{
+		offset: (pageId * PageSize) + BeeMetadataSize,
+		data:   t.data,
+	}
+
+	if page.pageType() == pageLeaf {
+		leaf := leafEntry{
+			key: key,
+			val: val,
+		}
+
+		// jika size cukup
+		if (page.pageSize() + leaf.size()) < PageSize {
+			entries := page.getLeafEntry()
+			entries = append(entries, leaf)
+			// tulis leaf
+			page.writeLeafEntry(entries)
+
+			log.Println(page.bytes())
+			log.Println(page.getLeafEntry())
+		}
+
+	}
+
+	// keyCount := binary.LittleEndian.Uint16(page[1:])
+	log.Println(page.pageType())
+
+	return []byte{}, 0, false
+
+}
+
+func (t *BeeTree) Insert(key string, value uint64) {
+	t.insert(0, []byte(key), value)
 }
