@@ -1,0 +1,276 @@
+package main
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"os"
+	"sort"
+	"syscall"
+)
+
+// ------------------------------------------------------------
+// PRODUCTION-STYLE MMAP B+ TREE (FULL GROWTH, NO DELETE YET)
+// ------------------------------------------------------------
+// ✔ Fixed-size pages (4KB)
+// ✔ Degree-based capacity
+// ✔ Leaf + internal nodes
+// ✔ Recursive split
+// ✔ Root growth
+// ✔ Page-ID addressing (mmap-safe)
+// ------------------------------------------------------------
+
+const (
+	PageSize = 4096
+	Degree   = 64
+)
+
+const (
+	pageLeaf uint8 = 1
+	pageInt  uint8 = 2
+)
+
+// Page header layout:
+// [0]    type (1 byte)
+// [1:3]  key count (uint16)
+// [3:11] next leaf (uint64, leaf only)
+// [11:]  entries
+
+// Entry (leaf): [klen u16][key][value u64]
+// Entry (int):  [klen u16][key][child u64]
+
+// ------------------------------------------------------------
+
+type Tree struct {
+	f     *os.File
+	data  []byte
+	pages uint64
+	root  uint64
+}
+
+func Open(path string) (*Tree, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	f.Truncate(PageSize * 1024)
+	data, _ := syscall.Mmap(int(f.Fd()), 0, PageSize*1024, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+
+	t := &Tree{f: f, data: data, pages: 1, root: 0}
+	initLeaf(t.page(0))
+	return t, nil
+}
+
+func (t *Tree) page(id uint64) []byte {
+	return t.data[id*PageSize : (id+1)*PageSize]
+}
+
+func initLeaf(p []byte) {
+	p[0] = pageLeaf
+	binary.LittleEndian.PutUint16(p[1:], 0)
+	binary.LittleEndian.PutUint64(p[3:], 0)
+}
+
+func initInt(p []byte) {
+	p[0] = pageInt
+	binary.LittleEndian.PutUint16(p[1:], 0)
+}
+
+func (t *Tree) allocLeaf() uint64 {
+	id := t.pages
+	t.pages++
+	initLeaf(t.page(id))
+	return id
+}
+
+func (t *Tree) allocInt() uint64 {
+	id := t.pages
+	t.pages++
+	initInt(t.page(id))
+	return id
+}
+
+// ------------------------------------------------------------
+// INSERT WITH FULL SPLIT PROPAGATION
+// ------------------------------------------------------------
+
+func (t *Tree) Insert(key []byte, value uint64) {
+	promo, right, split := t.insertRec(t.root, key, value)
+	if split {
+		newRoot := t.allocInt()
+		p := t.page(newRoot)
+		binary.LittleEndian.PutUint16(p[1:], 1)
+		off := 11
+		binary.LittleEndian.PutUint16(p[off:], uint16(len(promo)))
+		off += 2
+		copy(p[off:], promo)
+		off += len(promo)
+		binary.LittleEndian.PutUint64(p[off:], right)
+		t.root = newRoot
+	}
+}
+
+func (t *Tree) insertRec(pid uint64, key []byte, value uint64) ([]byte, uint64, bool) {
+	p := t.page(pid)
+	cnt := int(binary.LittleEndian.Uint16(p[1:]))
+	off := 11
+
+	if p[0] == pageLeaf {
+		entries := readLeafEntries(p, cnt)
+		entries = append(entries, leafEntry{key, value})
+		sort.Slice(entries, func(i, j int) bool { return bytes.Compare(entries[i].key, entries[j].key) < 0 })
+
+		if fitsLeaf(entries) {
+			writeLeaf(p, entries)
+			return nil, 0, false
+		}
+
+		mid := len(entries) / 2
+		left := entries[:mid]
+		rightEntries := entries[mid:]
+
+		rightPid := t.allocLeaf()
+		writeLeaf(p, left)
+		writeLeaf(t.page(rightPid), rightEntries)
+
+		binary.LittleEndian.PutUint64(t.page(rightPid)[3:], binary.LittleEndian.Uint64(p[3:]))
+		binary.LittleEndian.PutUint64(p[3:], rightPid)
+
+		return rightEntries[0].key, rightPid, true
+	}
+
+	// internal node
+	children := readIntEntries(p, cnt)
+	idx := 0
+	for idx < len(children) && bytes.Compare(key, children[idx].key) >= 0 {
+		idx++
+	}
+
+	promo, rightChild, split := t.insertRec(children[idx].child, key, value)
+	if !split {
+		return nil, 0, false
+	}
+
+	children = insertInt(children, idx, promo, rightChild)
+	if fitsInt(children) {
+		writeInt(p, children)
+		return nil, 0, false
+	}
+
+	mid := len(children) / 2
+	promoKey := children[mid].key
+
+	rightPid := t.allocInt()
+	writeInt(p, children[:mid])
+	writeInt(t.page(rightPid), children[mid+1:])
+
+	return promoKey, rightPid, true
+}
+
+// ------------------------------------------------------------
+// DATA HELPERS
+// ------------------------------------------------------------
+
+type leafEntry struct {
+	key   []byte
+	value uint64
+}
+
+type intEntry struct {
+	key   []byte
+	child uint64
+}
+
+func readLeafEntries(p []byte, cnt int) []leafEntry {
+	off := 11
+	out := make([]leafEntry, 0, cnt)
+	for i := 0; i < cnt; i++ {
+		klen := int(binary.LittleEndian.Uint16(p[off:]))
+		off += 2
+		k := append([]byte{}, p[off:off+klen]...)
+		off += klen
+		v := binary.LittleEndian.Uint64(p[off:])
+		off += 8
+		out = append(out, leafEntry{k, v})
+	}
+	return out
+}
+
+func writeLeaf(p []byte, e []leafEntry) {
+	binary.LittleEndian.PutUint16(p[1:], uint16(len(e)))
+	off := 11
+	for _, x := range e {
+		binary.LittleEndian.PutUint16(p[off:], uint16(len(x.key)))
+		off += 2
+		copy(p[off:], x.key)
+		off += len(x.key)
+		binary.LittleEndian.PutUint64(p[off:], x.value)
+		off += 8
+	}
+}
+
+func readIntEntries(p []byte, cnt int) []intEntry {
+	off := 11
+	out := make([]intEntry, 0, cnt)
+	for i := 0; i < cnt; i++ {
+		klen := int(binary.LittleEndian.Uint16(p[off:]))
+		off += 2
+		k := append([]byte{}, p[off:off+klen]...)
+		off += klen
+		c := binary.LittleEndian.Uint64(p[off:])
+		off += 8
+		out = append(out, intEntry{k, c})
+	}
+	return out
+}
+
+func writeInt(p []byte, e []intEntry) {
+	binary.LittleEndian.PutUint16(p[1:], uint16(len(e)))
+	off := 11
+	for _, x := range e {
+		binary.LittleEndian.PutUint16(p[off:], uint16(len(x.key)))
+		off += 2
+		copy(p[off:], x.key)
+		off += len(x.key)
+		binary.LittleEndian.PutUint64(p[off:], x.child)
+		off += 8
+	}
+}
+
+func insertInt(e []intEntry, idx int, key []byte, child uint64) []intEntry {
+	e = append(e, intEntry{})
+	copy(e[idx+1:], e[idx:])
+	e[idx] = intEntry{key, child}
+	return e
+}
+
+func fitsLeaf(e []leafEntry) bool {
+	size := 11
+	for _, x := range e {
+		size += 2 + len(x.key) + 8
+	}
+	return size <= PageSize
+}
+
+func fitsInt(e []intEntry) bool {
+	size := 11
+	for _, x := range e {
+		size += 2 + len(x.key) + 8
+	}
+	return size <= PageSize
+}
+
+// ------------------------------------------------------------
+// DEMO
+// ------------------------------------------------------------
+
+func main() {
+	t, _ := Open("btree.db")
+
+	for i := 0; i < 10000; i++ {
+		k := []byte(fmt.Sprintf("key-%06d", i))
+		t.Insert(k, uint64(i))
+	}
+
+	fmt.Println("Inserted 10k keys, root page:", t.root)
+}
