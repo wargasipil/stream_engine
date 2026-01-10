@@ -121,6 +121,10 @@ func (t *BeeTree) fileSize() uint64 {
 	return binary.LittleEndian.Uint64(t.data[16:24])
 }
 
+func (t *BeeTree) putFileSize(fileSize uint64) {
+	binary.LittleEndian.PutUint64(t.data[16:24], fileSize)
+}
+
 func (t *BeeTree) rootPage() int {
 	d := binary.LittleEndian.Uint64(t.data[24:32])
 	return int(d)
@@ -138,17 +142,20 @@ func (t *BeeTree) nextPageId() int {
 }
 
 func (t *BeeTree) increaseSize() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	err := t.data.Flush()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	fileSize := t.fileSize() * 2
 	err = t.data.Unmap()
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileSize := t.fileSize() * 2
-	binary.LittleEndian.PutUint64(t.data[16:32], fileSize)
+
 	err = t.f.Truncate(int64(fileSize))
 	if err != nil {
 		log.Fatal(err)
@@ -158,6 +165,8 @@ func (t *BeeTree) increaseSize() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	t.putFileSize(fileSize)
 }
 
 func (t *BeeTree) createMetadata(fsize uint64) {

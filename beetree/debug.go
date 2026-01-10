@@ -8,6 +8,8 @@ import (
 
 func (t *BeeTree) Inspect() {
 	fsize := t.fileSize()
+	log.Println("filesize", fsize)
+
 	off := BeeMetadataSize
 
 	log.Println("pages count", t.pageCount())
@@ -15,10 +17,6 @@ func (t *BeeTree) Inspect() {
 	if fsize <= 0 {
 		return
 	}
-
-	log.Println(t.nextPageId())
-	log.Println(t.nextPageId())
-	log.Println(t.nextPageId())
 
 	for off < int(fsize) {
 		page := bpage{
@@ -32,7 +30,7 @@ func (t *BeeTree) Inspect() {
 		)
 		slog.Info("key", slog.Int("count", int(page.keyCount())))
 
-		off += PageSize + BeeMetadataSize
+		off += PageSize
 		time.Sleep(time.Second)
 	}
 }

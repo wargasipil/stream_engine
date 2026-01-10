@@ -22,15 +22,21 @@ func (t *BeeTree) findLeaf(key []byte) int {
 		}
 
 		entries := page.getInternalEntry()
+		entriesLen := len(entries)
 		i := sort.Search(len(entries), func(i int) bool {
 			return bytes.Compare(entries[i].key, key) < 0
 		})
 
-		if entries[i] == nil {
-			panic("data corupted cannot find leaf node")
+		if len(entries) == i {
+			n = entries[entriesLen-1].pageId
+		} else {
+			// if entries[i] == nil {
+			// 	panic("data corupted cannot find leaf node")
+			// }
+
+			n = int(entries[i].pageId)
 		}
 
-		n = int(entries[i].pageId)
 	default:
 		panic("unknown page type")
 	}
@@ -42,17 +48,21 @@ func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
 	mid := len(entries) / 2
 
 	rightPageId := t.nextPageId()
+
 	right := newBpage(rightPageId, pageLeaf, t.data)
 
 	// navigasi leaf
 	right.putNext(left.next())
 	right.putPrev(left.pageID())
-	nextPage := bpage{
-		offset: (right.next() * PageSize) + BeeMetadataSize,
-		data:   t.data,
+
+	if left.next() != 0 {
+		nextPage := bpage{
+			offset: (left.next() * PageSize) + BeeMetadataSize,
+			data:   t.data,
+		}
+		nextPage.putPrev(right.pageID())
+		left.putNext(right.pageID())
 	}
-	nextPage.putPrev(right.pageID())
-	left.putNext(right.pageID())
 
 	// rewriting data
 	rentries := entries[mid:]
@@ -102,15 +112,15 @@ func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
 
 func (t *BeeTree) insertIntoParent(page *bpage, entry *internalEntry) {
 	entries := page.getInternalEntry()
-	entrieslen := len(entries)
+	// entrieslen := len(entries)
 
 	i := sort.Search(len(entries), func(i int) bool {
 		return bytes.Compare(entries[i].key, entry.key) >= 0
 	})
 
-	if i < entrieslen && bytes.Equal(entries[i].key, entry.key) {
-		panic("index corrupted internal entry duplicated")
-	}
+	// if i < entrieslen && bytes.Equal(entries[i].key, entry.key) {
+	// 	panic("index corrupted internal entry duplicated")
+	// }
 
 	entries = append(entries, nil)
 	copy(entries[i+1:], entries[i:])
@@ -174,6 +184,15 @@ func (t *BeeTree) splitInternal(left *bpage, entries []*internalEntry) {
 }
 
 func (t *BeeTree) Insert(skey string, value uint64) {
+
+	// checking file size
+	if (((t.pageCount() + 8) * PageSize) + BeeMetadataSize) > int(t.fileSize()) {
+		t.increaseSize()
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	key := []byte(skey)
 	entry := leafEntry{
 		key: key,

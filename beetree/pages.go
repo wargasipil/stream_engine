@@ -2,7 +2,6 @@ package beetree
 
 import (
 	"encoding/binary"
-	"log"
 )
 
 /*
@@ -56,7 +55,6 @@ func (p *bpage) putPageType(pageType int) {
 }
 
 func (p *bpage) pageID() int {
-	log.Println("asdasd", p.offset+1, binary.LittleEndian.Uint64(p.data[p.offset+1:p.offset+9]))
 	d := binary.LittleEndian.Uint64(p.data[p.offset+1 : p.offset+9])
 	return int(d)
 }
@@ -132,9 +130,9 @@ func (p *bpage) getEntry() entryList {
 	return res
 }
 
-func (p *bpage) getInternalEntry() []*internalEntry {
+func (p *bpage) getInternalEntry() internalEntryList {
 	cnt := p.keyCount()
-	res := []*internalEntry{}
+	res := internalEntryList{}
 
 	var c int16 = 0
 	var klen int16

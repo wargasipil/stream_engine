@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
-	"github.com/wargasipil/stream_engine/stream_core"
+	"github.com/wargasipil/stream_engine/beetree"
 	// _ "net/http/pprof"
 )
 
@@ -34,41 +34,22 @@ func main() {
 	// }
 
 	// cfg := stream_core.NewDefaultCoreConfigTest()
-	cfg := stream_core.NewDefaultCoreConfig()
+	tree, err := beetree.NewBeeTree("/tmp/stream_engine/example.index")
 
-	kv, err := stream_core.NewHashMapCounter(cfg)
 	if err != nil {
-		log.Fatalf("failed to init kv counter: %v", err)
+		panic(err)
 	}
-	defer kv.Close()
 
-	// resetting counter
-	kv.ResetCounter()
-
+	defer tree.Close()
 	start := time.Now()
 
 	err = iterateExample("example-tiny.json", func(e *Transaction) error {
+		var t time.Time = time.Time(e.EntryTime)
 
-		err = kv.Transaction(func(tx *stream_core.Transaction) error {
-			metric := NewMetricTeamAccount(tx, uint64(e.TeamID), e.AccountKey)
-			metric.IncDebit(float64(e.Debit))
-			metric.IncCredit(float64(e.Credit))
-
-			metric.IncBalance(
-				metric.GetDebit() - metric.GetCredit(),
-			)
-
-			return nil
-		})
-
-		if err != nil {
-			return err
-		}
-
-		metric := NewMetricTeamAccount(kv, uint64(e.TeamID), e.AccountKey)
-		raw, _ := json.Marshal(metric.Data())
-		log.Println(string(raw))
-
+		key := fmt.Sprintf("team/%d/daily/%s/team/%d", e.TeamID, t.Format("2006-01-02"), e.AccountTeamID)
+		// tree.Insert(key, uint64(e.Debit))
+		log.Println(key)
+		log.Println(tree.Get([]byte(key)))
 		return nil
 
 	})
@@ -79,11 +60,13 @@ func main() {
 
 	duration := time.Since(start)
 
+	tree.Insert("hollow", 991)
+	log.Println(tree.Get([]byte("hollow")))
+
 	// kv.Snapshot(start, true, func(key string, kind reflect.Kind, value any) error {
 	// 	log.Printf("%s\t%.3f\n", key, value)
 	// 	return nil
 	// })
 
 	log.Printf("duration seconds %s", duration)
-	kv.PrintStat()
 }

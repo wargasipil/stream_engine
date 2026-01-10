@@ -17,12 +17,12 @@ func main() {
 
 	defer tree.Close()
 
-	tree.Inspect()
+	// tree.Inspect()
 
 	tree.Insert("sddd", 123)
 	tree.Insert("kedua", 123)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100000; i++ {
 		k := uuid.New().String()
 		log.Println(k)
 		tree.Insert(k, 400)

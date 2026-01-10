@@ -50,3 +50,11 @@ func (l entryList) Print() {
 		fmt.Printf("key: %s value: %d\n", string(l.key), l.val)
 	}
 }
+
+type internalEntryList []*internalEntry
+
+func (l internalEntryList) Print() {
+	for _, l := range l {
+		fmt.Printf("key: %s pageId: %d\n", string(l.key), l.pageId)
+	}
+}
