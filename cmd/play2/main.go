@@ -3,17 +3,29 @@ package main
 import (
 	"log"
 
-	"github.com/wargasipil/stream_engine/stream_core"
+	"github.com/google/uuid"
+	"github.com/wargasipil/stream_engine/beetree"
 )
 
 func main() {
-	tree, err := stream_core.NewBeeTree("/tmp/stream_engine/beetree_test")
+	fname := "/tmp/stream_engine/beetree_test"
+	// defer os.RemoveAll(fname)
+	tree, err := beetree.NewBeeTree(fname)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	defer tree.Close()
 
-	tree.Insert("slow", 200)
-	tree.Insert("user/asdasd/team6", 200)
+	tree.Inspect()
+
+	tree.Insert("sddd", 123)
+	tree.Insert("kedua", 123)
+
+	for i := 0; i < 10; i++ {
+		k := uuid.New().String()
+		log.Println(k)
+		tree.Insert(k, 400)
+	}
+
 }
