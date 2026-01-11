@@ -43,13 +43,13 @@ func main() {
 	defer tree.Close()
 	start := time.Now()
 
-	err = iterateExample("example-tiny.json", func(e *Transaction) error {
+	err = iterateExample("example.json", func(e *Transaction) error {
 		var t time.Time = time.Time(e.EntryTime)
 
 		key := fmt.Sprintf("team/%d/daily/%s/team/%d", e.TeamID, t.Format("2006-01-02"), e.AccountTeamID)
-		// tree.Insert(key, uint64(e.Debit))
-		log.Println(key)
-		log.Println(tree.Get([]byte(key)))
+		tree.Insert(key, uint64(e.Debit))
+		// log.Println(key)
+		// log.Println(tree.Get([]byte(key)))
 		return nil
 
 	})
