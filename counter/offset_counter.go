@@ -11,7 +11,7 @@ import (
 
 /*
 metadata
-offset (8byte /64bit) | lastUpdatedOffset (8byte /64bit) | reserved (16byte /64bit) | body dynamic
+offset (8byte /64bit) | head list (8byte /64bit) | tail list | reserved (8 byte /64bit) | body dynamic
 
 body counter
 counter (8byte /64bit) | timestamp (8byte /64bit) | next (8byte /64bit) | prev (8byte /64bit) | keylen (4 byte /32bit) | keystring
@@ -63,10 +63,6 @@ func NewOffsetCounter(fname string) (*OffsetCounter, error) {
 	count := OffsetCounter{sync.Mutex{}, size, f, m}
 	if isnew {
 		count.putOffset(OFFSET_COUNTER_META_SIZE)
-		count.putLastUpdated(&counter{
-			offset: OFFSET_COUNTER_META_SIZE,
-			data:   count.data,
-		})
 	}
 
 	return &count, nil
@@ -81,16 +77,54 @@ func (c *OffsetCounter) putOffset(offset uint64) {
 	binary.LittleEndian.PutUint64(c.data[:8], offset)
 }
 
-func (c *OffsetCounter) lastUpdated() *counter {
+func (c *OffsetCounter) head() *counter {
 	offset := binary.LittleEndian.Uint64(c.data[8:16])
+	if offset == 0 {
+		return nil
+	}
 	return &counter{
 		offset: offset,
 		data:   c.data,
 	}
 }
 
-func (c *OffsetCounter) putLastUpdated(cc *counter) {
+func (c *OffsetCounter) putHead(cc *counter) {
+	if cc == nil {
+		return
+	}
+
+	if cc.offset == 0 {
+		panic("invalid offset")
+		return
+	}
+	cc.putPrev(nil)
 	binary.LittleEndian.PutUint64(c.data[8:16], cc.offset)
+}
+
+func (c *OffsetCounter) tail() *counter {
+
+	offset := binary.LittleEndian.Uint64(c.data[16:24])
+	if offset == 0 {
+		return nil
+	}
+	return &counter{
+		offset: offset,
+		data:   c.data,
+	}
+
+}
+
+func (c *OffsetCounter) putTail(cc *counter) {
+	if cc == nil {
+		return
+	}
+
+	if cc.offset == 0 {
+		panic("invalid offset")
+		return
+	}
+	cc.putNext(nil)
+	binary.LittleEndian.PutUint64(c.data[16:24], cc.offset)
 }
 
 func (c *OffsetCounter) nextOffset(size uint64) uint64 {
@@ -106,7 +140,9 @@ func (c *OffsetCounter) NewCounter(key string) *counter {
 	defer c.lock.Unlock()
 
 	size := len(key) + OFFSET_COUNTER_SIZE
-	return &counter{c.nextOffset(uint64(size)), c.data}
+	cc := &counter{c.nextOffset(uint64(size)), c.data}
+	// c.append(cc)
+	return cc
 }
 
 func (c *OffsetCounter) Offset(offset uint64) *counter {
@@ -122,16 +158,49 @@ func (c *OffsetCounter) UpdateValue(offset uint64, value uint64) {
 	cc.putTimestamp(time.Now())
 	cc.putValue(value)
 
-	// change previous
-	if cc.next() != nil {
-		cc.prev().putNext(cc.next())
-	} else {
-		cc.prev().putNext(c.lastUpdated())
+	c.remove(&cc)
+	c.append(&cc)
+	// c.chain(&cc)
+
+}
+
+func (c *OffsetCounter) remove(n *counter) {
+	prev := n.prev()
+	next := n.next()
+
+	n.putPrev(nil)
+	n.putNext(nil)
+
+	if next != nil && prev != nil {
+		prev.putNext(next)
+		next.putPrev(prev)
+		return
 	}
 
-	// change current counter previous
-	cc.putPrev(c.lastUpdated())
-	c.putLastUpdated(&cc)
+	if next != nil {
+		next.putPrev(nil)
+		return
+	}
+
+	if prev != nil {
+		prev.putNext(nil)
+		return
+	}
+
+}
+
+func (c *OffsetCounter) append(n *counter) {
+	tail := c.tail()
+
+	if tail == nil {
+		c.putTail(n)
+		c.putHead(n)
+		return
+	}
+
+	n.putPrev(tail)
+	tail.putNext(n)
+	c.putTail(n)
 
 }
 
@@ -157,6 +226,10 @@ type counter struct {
 	data   []byte
 }
 
+func (c *counter) valueByte() []byte {
+	return c.data[c.offset : c.offset+8]
+}
+
 func (c *counter) value() uint64 {
 	return binary.LittleEndian.Uint64(c.data[c.offset : c.offset+8])
 }
@@ -172,7 +245,7 @@ func (c *counter) timestamp() time.Time {
 
 func (c *counter) putTimestamp(t time.Time) {
 	d := t.UnixMicro()
-	binary.LittleEndian.PutUint64(c.data[c.offset:c.offset+8], uint64(d))
+	binary.LittleEndian.PutUint64(c.data[c.offset+8:c.offset+16], uint64(d))
 }
 
 func (c *counter) next() *counter {
@@ -187,11 +260,18 @@ func (c *counter) next() *counter {
 }
 
 func (c *counter) putNext(nc *counter) {
+	if nc == nil {
+		binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], 0)
+		return
+	}
 	binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], nc.offset)
 }
 
 func (c *counter) prev() *counter {
 	offset := binary.LittleEndian.Uint64(c.data[c.offset+24 : c.offset+32])
+	if offset == 0 {
+		return nil
+	}
 	return &counter{
 		offset: offset,
 		data:   c.data,
@@ -199,7 +279,15 @@ func (c *counter) prev() *counter {
 }
 
 func (c *counter) putPrev(pc *counter) {
+	if pc == nil {
+		binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], 0)
+		return
+	}
 	binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], pc.offset)
+}
+
+func (c *counter) isCounter(cc *counter) bool {
+	return c.offset == cc.offset
 }
 
 func (c *counter) keylen() uint32 {
