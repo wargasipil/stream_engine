@@ -1,6 +1,7 @@
 package counter
 
 import (
+	"log"
 	"math"
 	"path"
 	"time"
@@ -25,6 +26,11 @@ func NewKeyCounter(datadir string) *KeyCounter {
 	}
 
 	return &KeyCounter{offsetCounter, index}
+}
+
+// ResetCounter implements stream_core.KeyStore.
+func (k *KeyCounter) ResetCounter() error {
+	panic("not implemented") // TODO: Implement)
 }
 
 // PutInt64 implements stream_core.KeyStore.
@@ -108,9 +114,17 @@ func (k *KeyCounter) PutFloat64(key string, value float64) float64 {
 	if !ok {
 		counter := k.cdata.NewCounter(key)
 		counter.putKey(key)
+
 		k.index.Insert(key, counter.offset)
 		offset = counter.offset
+
+		if offset == 8149 {
+			log.Println(offset)
+		}
 	}
+
+	// log.Println("offset key", offset)
+
 	uval := math.Float64bits(value)
 	k.cdata.UpdateValue(offset, uval)
 	return value

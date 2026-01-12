@@ -85,4 +85,6 @@ type KeyStore interface {
 	IncUint64(key string, delta uint64) uint64
 	IncFloat64(key string, delta float64) float64
 	Close() error
+	ResetCounter() error
+	// Snapshot()
 }

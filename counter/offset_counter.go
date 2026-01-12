@@ -11,7 +11,7 @@ import (
 
 /*
 metadata
-offset (8byte /64bit) | head list (8byte /64bit) | tail list | reserved (8 byte /64bit) | body dynamic
+offset (8byte /64bit) | head list (8byte /64bit) | tail list (8byte /64bit) | reserved (8 byte /64bit) | body dynamic
 
 body counter
 counter (8byte /64bit) | timestamp (8byte /64bit) | next (8byte /64bit) | prev (8byte /64bit) | keylen (4 byte /32bit) | keystring
@@ -82,10 +82,9 @@ func (c *OffsetCounter) head() *counter {
 	if offset == 0 {
 		return nil
 	}
-	return &counter{
-		offset: offset,
-		data:   c.data,
-	}
+
+	return newCounter(offset, c.data)
+
 }
 
 func (c *OffsetCounter) putHead(cc *counter) {
@@ -107,10 +106,8 @@ func (c *OffsetCounter) tail() *counter {
 	if offset == 0 {
 		return nil
 	}
-	return &counter{
-		offset: offset,
-		data:   c.data,
-	}
+
+	return newCounter(offset, c.data)
 
 }
 
@@ -140,13 +137,19 @@ func (c *OffsetCounter) NewCounter(key string) *counter {
 	defer c.lock.Unlock()
 
 	size := len(key) + OFFSET_COUNTER_SIZE
-	cc := &counter{c.nextOffset(uint64(size)), c.data}
-	// c.append(cc)
-	return cc
+
+	if (c.offset() + uint64(size)*10) > uint64(c.filesize) {
+		err := c.increaseSize()
+		if err != nil {
+			panic("cannot increase filesize offset key")
+		}
+	}
+
+	return newCounter(c.nextOffset(uint64(size)), c.data)
 }
 
 func (c *OffsetCounter) Offset(offset uint64) *counter {
-	return &counter{offset, c.data}
+	return newCounter(offset, c.data)
 }
 
 func (c *OffsetCounter) UpdateValue(offset uint64, value uint64) {
@@ -219,93 +222,29 @@ func (c *OffsetCounter) Close() error {
 	return err
 }
 
+func (c *OffsetCounter) increaseSize() error {
+	err := c.data.Flush()
+	if err != nil {
+		return err
+	}
+
+	err = c.data.Unmap()
+	if err != nil {
+		return err
+	}
+
+	c.filesize = c.filesize * 2
+	err = c.f.Truncate(c.filesize)
+	if err != nil {
+		return err
+	}
+
+	c.data, err = mmap.Map(c.f, mmap.RDWR, 0)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // -------------------------- counter data ---------------------------------------
-
-type counter struct {
-	offset uint64
-	data   []byte
-}
-
-func (c *counter) valueByte() []byte {
-	return c.data[c.offset : c.offset+8]
-}
-
-func (c *counter) value() uint64 {
-	return binary.LittleEndian.Uint64(c.data[c.offset : c.offset+8])
-}
-
-func (c *counter) putValue(value uint64) {
-	binary.LittleEndian.PutUint64(c.data[c.offset:c.offset+8], value)
-}
-
-func (c *counter) timestamp() time.Time {
-	micro := binary.LittleEndian.Uint64(c.data[c.offset+8 : c.offset+16])
-	return time.UnixMicro(int64(micro))
-}
-
-func (c *counter) putTimestamp(t time.Time) {
-	d := t.UnixMicro()
-	binary.LittleEndian.PutUint64(c.data[c.offset+8:c.offset+16], uint64(d))
-}
-
-func (c *counter) next() *counter {
-	offset := binary.LittleEndian.Uint64(c.data[c.offset+16 : c.offset+24])
-	if offset == 0 {
-		return nil
-	}
-	return &counter{
-		offset: offset,
-		data:   c.data,
-	}
-}
-
-func (c *counter) putNext(nc *counter) {
-	if nc == nil {
-		binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], 0)
-		return
-	}
-	binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], nc.offset)
-}
-
-func (c *counter) prev() *counter {
-	offset := binary.LittleEndian.Uint64(c.data[c.offset+24 : c.offset+32])
-	if offset == 0 {
-		return nil
-	}
-	return &counter{
-		offset: offset,
-		data:   c.data,
-	}
-}
-
-func (c *counter) putPrev(pc *counter) {
-	if pc == nil {
-		binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], 0)
-		return
-	}
-	binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], pc.offset)
-}
-
-func (c *counter) isCounter(cc *counter) bool {
-	return c.offset == cc.offset
-}
-
-func (c *counter) keylen() uint32 {
-	return binary.LittleEndian.Uint32(c.data[c.offset+32 : c.offset+36])
-}
-
-func (c *counter) putKeylen(l uint32) {
-	binary.LittleEndian.PutUint32(c.data[c.offset+32:c.offset+36], l)
-}
-
-func (c *counter) key() string {
-	klen := c.keylen()
-	data := c.data[c.offset+36 : c.offset+36+uint64(klen)]
-	return string(data)
-}
-
-func (c *counter) putKey(key string) {
-	klen := len(key)
-	c.putKeylen(uint32(klen))
-	copy(c.data[c.offset+36:c.offset+36+uint64(klen)], []byte(key))
-}
