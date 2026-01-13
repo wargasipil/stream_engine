@@ -12,23 +12,28 @@ func (t *BeeTree) findLeaf(key []byte) int {
 		data:   t.data,
 	}
 
-	switch int(page.pageType()) {
-	case pageLeaf:
-		return n
-	case pageInternal:
-		page = &bpage{
-			offset: (int(page.pageID()) * PageSize) + BeeMetadataSize,
-			data:   t.data,
-		}
+	for page.pageType() == pageInternal {
+		// if page.pageType() != pageInternal {
+		// 	panic("unknown page type")
+		// }
+
+		// page = &bpage{
+		// 	offset: (int(page.pageID()) * PageSize) + BeeMetadataSize,
+		// 	data:   t.data,
+		// }
 
 		entries := page.getInternalEntry()
-		entriesLen := len(entries)
+
 		i := sort.Search(len(entries), func(i int) bool {
-			return bytes.Compare(entries[i].key, key) < 0
+			return bytes.Compare(entries[i].key, key) > 0
 		})
 
+		if i > 0 {
+			i--
+		}
+
 		if len(entries) == i {
-			n = entries[entriesLen-1].pageId
+			n = entries[0].pageId
 		} else {
 			// if entries[i] == nil {
 			// 	panic("data corupted cannot find leaf node")
@@ -37,11 +42,24 @@ func (t *BeeTree) findLeaf(key []byte) int {
 			n = int(entries[i].pageId)
 		}
 
-	default:
-		panic("unknown page type")
+		page = &bpage{
+			offset: (int(n) * PageSize) + BeeMetadataSize,
+			data:   t.data,
+		}
+
 	}
 
-	return n
+	// entries := page.getEntry()
+	// if len(entries) > 0 {
+	// 	log.Println("leaf finding", string(key), page.pageType())
+	// 	log.Println("leaf min", string(entries[0].key), "max", string(entries[len(entries)-1].key))
+	// }
+
+	return page.pageID()
+}
+
+func (t *BeeTree) pageIdOffset(pageID int) int {
+	return pageID*PageSize + BeeMetadataSize
 }
 
 func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
@@ -184,14 +202,13 @@ func (t *BeeTree) splitInternal(left *bpage, entries []*internalEntry) {
 }
 
 func (t *BeeTree) Insert(skey string, value uint64) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
 
 	// checking file size
 	if (((t.pageCount() + 8) * PageSize) + BeeMetadataSize) > int(t.fileSize()) {
 		t.increaseSize()
 	}
-
-	t.lock.Lock()
-	defer t.lock.Unlock()
 
 	key := []byte(skey)
 	entry := leafEntry{

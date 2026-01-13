@@ -1,7 +1,6 @@
 package counter
 
 import (
-	"log"
 	"math"
 	"path"
 	"time"
@@ -35,15 +34,16 @@ func (k *KeyCounter) ResetCounter() error {
 
 // PutInt64 implements stream_core.KeyStore.
 func (k *KeyCounter) PutInt64(key string, value int64) int64 {
-	var offset uint64
+	var offset int
 
-	offset, ok := k.index.Get([]byte(key))
+	existOffset, ok := k.index.Get([]byte(key))
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		counter.putKey(key)
-		k.index.Insert(key, counter.offset)
+		k.index.Insert(key, uint64(counter.offset))
 		offset = counter.offset
+	} else {
+		offset = int(existOffset)
 	}
 
 	k.cdata.UpdateValue(offset, uint64(value))
@@ -57,7 +57,7 @@ func (k *KeyCounter) GetInt64(key string) int64 {
 		return 0
 	}
 
-	v := k.cdata.Offset(offset).value()
+	v := k.cdata.Offset(int(offset)).value()
 	return int64(v)
 }
 
@@ -68,7 +68,7 @@ func (k *KeyCounter) GetFloat64(key string) float64 {
 		return 0
 	}
 
-	v := k.cdata.Offset(offset).value()
+	v := k.cdata.Offset(int(offset)).value()
 	return math.Float64frombits(v)
 }
 
@@ -79,7 +79,7 @@ func (k *KeyCounter) GetUint64(key string) uint64 {
 		return 0
 	}
 
-	v := k.cdata.Offset(offset).value()
+	v := k.cdata.Offset(int(offset)).value()
 	return v
 }
 
@@ -109,18 +109,16 @@ func (k *KeyCounter) IncUint64(key string, delta uint64) uint64 {
 
 // PutFloat64 implements stream_core.KeyStore.
 func (k *KeyCounter) PutFloat64(key string, value float64) float64 {
-	offset, ok := k.index.Get([]byte(key))
+	var offset int
+
+	existOffset, ok := k.index.Get([]byte(key))
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		counter.putKey(key)
-
-		k.index.Insert(key, counter.offset)
+		k.index.Insert(key, uint64(counter.offset))
 		offset = counter.offset
-
-		if offset == 8149 {
-			log.Println(offset)
-		}
+	} else {
+		offset = int(existOffset)
 	}
 
 	// log.Println("offset key", offset)
@@ -132,13 +130,16 @@ func (k *KeyCounter) PutFloat64(key string, value float64) float64 {
 
 // PutUint64 implements stream_core.KeyStore.
 func (k *KeyCounter) PutUint64(key string, value uint64) uint64 {
-	offset, ok := k.index.Get([]byte(key))
+	var offset int
+
+	existOffset, ok := k.index.Get([]byte(key))
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		counter.putKey(key)
-		k.index.Insert(key, counter.offset)
+		k.index.Insert(key, uint64(counter.offset))
 		offset = counter.offset
+	} else {
+		offset = int(existOffset)
 	}
 	k.cdata.UpdateValue(offset, value)
 	return value

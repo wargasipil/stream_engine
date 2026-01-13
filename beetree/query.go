@@ -19,8 +19,19 @@ func (t *BeeTree) Get(key []byte) (uint64, bool) {
 	i := sort.Search(entriesLen, func(i int) bool {
 		return bytes.Compare(entries[i].key, key) >= 0
 	})
+
 	if i < entriesLen && bytes.Equal(entries[i].key, key) {
 		return entries[i].val, true
 	}
+
+	// log.Println("errorrr", string(key))
+	// entries.Print()
+	// log.Println("-----------------------")
+	// next := bpage{
+	// 	offset: page.next(),
+	// 	data:   t.data,
+	// }
+	// next.getEntry().Print()
+
 	return 0, false
 }

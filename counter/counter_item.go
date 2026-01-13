@@ -3,24 +3,19 @@ package counter
 import (
 	"encoding/binary"
 	"log"
+	"os"
 	"time"
 )
 
 type counter struct {
-	offset uint64
+	offset int
 	data   []byte
 }
 
-func newCounter(offset uint64, data []byte) *counter {
-	if offset > 32000000 {
-		log.Println(offset)
-		panic("key is too long")
-	}
-	return &counter{offset, data}
-}
+func newCounter(offset int, data []byte) *counter {
 
-func (c *counter) valueByte() []byte {
-	return c.data[c.offset : c.offset+8]
+	cc := &counter{offset, data}
+	return cc
 }
 
 func (c *counter) value() uint64 {
@@ -41,8 +36,14 @@ func (c *counter) putTimestamp(t time.Time) {
 	binary.LittleEndian.PutUint64(c.data[c.offset+8:c.offset+16], uint64(d))
 }
 
-func (c *counter) next() *counter {
+func (c *counter) nextOffset() int {
 	offset := binary.LittleEndian.Uint64(c.data[c.offset+16 : c.offset+24])
+	return int(offset)
+
+}
+
+func (c *counter) next() *counter {
+	offset := int(binary.LittleEndian.Uint64(c.data[c.offset+16 : c.offset+24]))
 	if offset == 0 {
 		return nil
 	}
@@ -52,23 +53,31 @@ func (c *counter) next() *counter {
 
 func (c *counter) putNext(nc *counter) {
 	if nc == nil {
-		binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], 0)
+		var zero int = 0
+		binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], uint64(zero))
 		return
 	}
 
-	if nc.offset > 32000000 {
-		log.Println(nc.offset)
-		return
-	}
+	binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], uint64(nc.offset))
+}
 
-	binary.LittleEndian.PutUint64(c.data[c.offset+16:c.offset+24], nc.offset)
+func (c *counter) prevOffset() int {
+	offset := binary.LittleEndian.Uint64(c.data[c.offset+24 : c.offset+32])
+	return int(offset)
+
 }
 
 func (c *counter) prev() *counter {
-	offset := binary.LittleEndian.Uint64(c.data[c.offset+24 : c.offset+32])
+	offset := int(binary.LittleEndian.Uint64(c.data[c.offset+24 : c.offset+32]))
 	if offset == 0 {
 		return nil
 	}
+
+	os.WriteFile("/tmp/stream_engine/debug_file", c.data[c.offset:c.offset+100], 0644)
+	os.WriteFile("/tmp/stream_engine/debug_file2", c.data[c.offset-100:c.offset], 0644)
+
+	log.Println("asdasdasd2", offset, c.key(), c.data[c.offset+24:c.offset+32])
+	log.Println(c.dataMap())
 
 	return newCounter(offset, c.data)
 
@@ -77,28 +86,22 @@ func (c *counter) prev() *counter {
 func (c *counter) putPrev(pc *counter) {
 
 	if pc == nil {
-		binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], 0)
+		var zero int = 0
+		binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], uint64(zero))
 		return
 	}
 
-	if pc.offset > 32000000 {
-		log.Println(pc.offset)
-		return
-	}
-	binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], pc.offset)
+	binary.LittleEndian.PutUint64(c.data[c.offset+24:c.offset+32], uint64(pc.offset))
 }
 
 // func (c *counter) isCounter(cc *counter) bool {
 // 	return c.offset == cc.offset
 // }
 
-func (c *counter) keylen() uint32 {
+func (c *counter) keylen() int {
 	l := binary.LittleEndian.Uint32(c.data[c.offset+32 : c.offset+36])
-	if l > 32000000 {
-		log.Println(string(c.data[c.offset+32 : c.offset+36]))
-		panic("key is too long")
-	}
-	return l
+
+	return int(l)
 }
 
 func (c *counter) putKeylen(l uint32) {
@@ -107,15 +110,33 @@ func (c *counter) putKeylen(l uint32) {
 
 func (c *counter) key() string {
 	klen := c.keylen()
-	data := c.data[c.offset+36 : c.offset+36+uint64(klen)]
+	data := c.data[c.offset+36 : c.offset+36+int(klen)]
 	return string(data)
 }
 
 func (c *counter) putKey(key string) {
 	klen := len(key)
-	if c.offset == 8149 {
-		log.Println(klen)
+	if c.keylen() != 0 {
+		panic("key is not empty maybe overwrited")
 	}
 	c.putKeylen(uint32(klen))
-	copy(c.data[c.offset+36:c.offset+36+uint64(klen)], []byte(key))
+
+	off := c.offset + OFFSET_COUNTER_SIZE
+	for i, v := range []byte(key) {
+		c.data[off+i] = v
+	}
+
+	// copy(c.data[:c.offset+36+uint64(klen)], []byte(key))
+}
+
+func (c *counter) dataMap() map[string]any {
+	return map[string]any{
+		"offset":    c.offset,
+		"value":     c.value(),
+		"timestamp": c.timestamp(),
+		"next":      c.nextOffset(),
+		"prev":      c.prevOffset(),
+		"keylen":    c.keylen(),
+		"key":       c.key(),
+	}
 }

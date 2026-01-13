@@ -2,7 +2,9 @@ package counter
 
 import (
 	"encoding/binary"
+	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +29,7 @@ const (
 
 type OffsetCounter struct {
 	lock     sync.Mutex
-	filesize int64
+	filesize int
 	f        *os.File
 	data     mmap.MMap
 }
@@ -60,7 +62,7 @@ func NewOffsetCounter(fname string) (*OffsetCounter, error) {
 		return nil, err
 	}
 
-	count := OffsetCounter{sync.Mutex{}, size, f, m}
+	count := OffsetCounter{sync.Mutex{}, int(size), f, m}
 	if isnew {
 		count.putOffset(OFFSET_COUNTER_META_SIZE)
 	}
@@ -68,13 +70,13 @@ func NewOffsetCounter(fname string) (*OffsetCounter, error) {
 	return &count, nil
 }
 
-func (c *OffsetCounter) offset() uint64 {
+func (c *OffsetCounter) offset() int {
 	d := binary.LittleEndian.Uint64(c.data[:8])
-	return d
+	return int(d)
 }
 
-func (c *OffsetCounter) putOffset(offset uint64) {
-	binary.LittleEndian.PutUint64(c.data[:8], offset)
+func (c *OffsetCounter) putOffset(offset int) {
+	binary.LittleEndian.PutUint64(c.data[:8], uint64(offset))
 }
 
 func (c *OffsetCounter) head() *counter {
@@ -83,7 +85,7 @@ func (c *OffsetCounter) head() *counter {
 		return nil
 	}
 
-	return newCounter(offset, c.data)
+	return newCounter(int(offset), c.data)
 
 }
 
@@ -94,10 +96,9 @@ func (c *OffsetCounter) putHead(cc *counter) {
 
 	if cc.offset == 0 {
 		panic("invalid offset")
-		return
 	}
 	cc.putPrev(nil)
-	binary.LittleEndian.PutUint64(c.data[8:16], cc.offset)
+	binary.LittleEndian.PutUint64(c.data[8:16], uint64(cc.offset))
 }
 
 func (c *OffsetCounter) tail() *counter {
@@ -107,7 +108,7 @@ func (c *OffsetCounter) tail() *counter {
 		return nil
 	}
 
-	return newCounter(offset, c.data)
+	return newCounter(int(offset), c.data)
 
 }
 
@@ -118,41 +119,47 @@ func (c *OffsetCounter) putTail(cc *counter) {
 
 	if cc.offset == 0 {
 		panic("invalid offset")
-		return
 	}
 	cc.putNext(nil)
-	binary.LittleEndian.PutUint64(c.data[16:24], cc.offset)
+	binary.LittleEndian.PutUint64(c.data[16:24], uint64(cc.offset))
 }
 
-func (c *OffsetCounter) nextOffset(size uint64) uint64 {
+func (c *OffsetCounter) createCounter(key string) *counter {
 	offset := c.offset()
 
-	nextOffset := offset + size
+	cc := newCounter(offset, c.data)
+	cc.putKey(key)
+
+	nextOffset := offset + OFFSET_COUNTER_SIZE + len(key)
 	c.putOffset(nextOffset)
-	return offset
+
+	log.Println("oldoffset", offset, "newoffset", nextOffset, "keylen", len(key), "uint", uint64(len(key)), key)
+
+	return cc
 }
 
 func (c *OffsetCounter) NewCounter(key string) *counter {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	size := len(key) + OFFSET_COUNTER_SIZE
+	size := len(key) + 2000
+	nextSize := c.offset() + size
 
-	if (c.offset() + uint64(size)*10) > uint64(c.filesize) {
+	if nextSize > int(c.filesize) {
 		err := c.increaseSize()
 		if err != nil {
 			panic("cannot increase filesize offset key")
 		}
 	}
 
-	return newCounter(c.nextOffset(uint64(size)), c.data)
+	return c.createCounter(key)
 }
 
-func (c *OffsetCounter) Offset(offset uint64) *counter {
+func (c *OffsetCounter) Offset(offset int) *counter {
 	return newCounter(offset, c.data)
 }
 
-func (c *OffsetCounter) UpdateValue(offset uint64, value uint64) {
+func (c *OffsetCounter) UpdateValue(offset int, value uint64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -234,7 +241,7 @@ func (c *OffsetCounter) increaseSize() error {
 	}
 
 	c.filesize = c.filesize * 2
-	err = c.f.Truncate(c.filesize)
+	err = c.f.Truncate(int64(c.filesize))
 	if err != nil {
 		return err
 	}
@@ -247,4 +254,40 @@ func (c *OffsetCounter) increaseSize() error {
 	return nil
 }
 
-// -------------------------- counter data ---------------------------------------
+func (c *OffsetCounter) Debug(handler func() error) error {
+	var err error
+
+	startOffset := OFFSET_COUNTER_META_SIZE
+	for startOffset < int(c.filesize) {
+		cc := counter{startOffset, c.data}
+		keylen := cc.keylen()
+		if keylen == 0 {
+			break
+		}
+
+		log.Println(
+			"key_len", keylen,
+			"startOffset", startOffset,
+			"prevOffset", cc.prevOffset(),
+			"nextOffset", cc.nextOffset(),
+			"key", cc.key(),
+		)
+
+		if strings.Contains(cc.key(), "team_account/65/reven") {
+			break
+		}
+
+		err = handler()
+		if err != nil {
+			return err
+		}
+		startOffset += OFFSET_COUNTER_SIZE + int(keylen)
+	}
+
+	dd := newCounter(23617928, c.data)
+	// dd := newCounter(7888, c.data)
+
+	log.Println("\n\n", dd.dataMap())
+
+	return nil
+}
