@@ -133,7 +133,7 @@ func (c *OffsetCounter) createCounter(key string) *counter {
 	nextOffset := offset + OFFSET_COUNTER_SIZE + len(key)
 	c.putOffset(nextOffset)
 
-	log.Println("oldoffset", offset, "newoffset", nextOffset, "keylen", len(key), "uint", uint64(len(key)), key)
+	// log.Println("oldoffset", offset, "newoffset", nextOffset, "keylen", len(key), "uint", uint64(len(key)), key)
 
 	return cc
 }

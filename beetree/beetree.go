@@ -47,7 +47,7 @@ func (r relOffset) Offset(off int) int {
 
 type BeeTree struct {
 	f    *os.File
-	lock sync.Mutex
+	lock sync.RWMutex
 	data mmap.MMap
 }
 
@@ -79,12 +79,13 @@ func NewBeeTree(fname string) (*BeeTree, error) {
 
 	bee := &BeeTree{
 		f,
-		sync.Mutex{},
+		sync.RWMutex{},
 		m,
 	}
 
 	if isCreateMeta {
 		bee.createMetadata(PageSize * 1024)
+		bee.Insert([]byte{0x0}, 255)
 	}
 
 	return bee, nil
@@ -141,9 +142,10 @@ func (t *BeeTree) nextPageId() int {
 	return next - 1
 }
 
+// hati hati tidak di lock
 func (t *BeeTree) increaseSize() {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	// t.lock.Lock()
+	// defer t.lock.Unlock()
 
 	err := t.data.Flush()
 	if err != nil {

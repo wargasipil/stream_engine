@@ -47,7 +47,7 @@ func main() {
 		var t time.Time = time.Time(e.EntryTime)
 
 		key := fmt.Sprintf("team/%d/daily/%s/team/%d", e.TeamID, t.Format("2006-01-02"), e.AccountTeamID)
-		tree.Insert(key, uint64(e.Debit))
+		tree.InsertKeyString(key, uint64(e.Debit))
 		// log.Println(key)
 		// log.Println(tree.Get([]byte(key)))
 		return nil
@@ -60,7 +60,7 @@ func main() {
 
 	duration := time.Since(start)
 
-	tree.Insert("hollow", 991)
+	tree.InsertKeyString("hollow", 991)
 	log.Println(tree.Get([]byte("hollow")))
 
 	// kv.Snapshot(start, true, func(key string, kind reflect.Kind, value any) error {

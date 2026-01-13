@@ -17,12 +17,12 @@ type MetricTeamAccount struct {
 	store stream_core.KeyStore
 
 	// Jangan Diubah letterlek
-	TeamID uint64
+	TeamID int64
 	// Jangan Diubah letterlek
 	AccountKey string
 }
 
-func NewMetricTeamAccount(store stream_core.KeyStore, TeamID uint64, AccountKey string) *MetricTeamAccount {
+func NewMetricTeamAccount(store stream_core.KeyStore, TeamID int64, AccountKey string) *MetricTeamAccount {
 	keys := []string{}
 	names := []string{}
 	keys = append(keys, fmt.Sprintf("%d", TeamID))
@@ -56,8 +56,8 @@ func NewMetricTeamAccountFromKey(store stream_core.KeyStore, mkey string) (*Metr
 	if len(indexkeys) <= 1 {
 		return nil, errors.New("index on key invalid")
 	}
-	var TeamID uint64
-	TeamID, err = strconv.ParseUint(indexkeys[0], 10, 64)
+	var TeamID int64
+	TeamID, err = strconv.ParseInt(indexkeys[0], 10, 64)
 
 	if err != nil {
 		return nil, err

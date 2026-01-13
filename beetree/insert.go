@@ -201,16 +201,20 @@ func (t *BeeTree) splitInternal(left *bpage, entries []*internalEntry) {
 	t.insertIntoParent(parentPage, &entry)
 }
 
-func (t *BeeTree) Insert(skey string, value uint64) {
+func (t *BeeTree) InsertKeyString(key string, value uint64) {
+	t.Insert([]byte(key), value)
+}
+
+func (t *BeeTree) Insert(key []byte, value uint64) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// checking file size
 	if (((t.pageCount() + 8) * PageSize) + BeeMetadataSize) > int(t.fileSize()) {
+
 		t.increaseSize()
 	}
 
-	key := []byte(skey)
 	entry := leafEntry{
 		key: key,
 		val: value,

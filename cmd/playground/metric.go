@@ -4,7 +4,7 @@ package main
 
 type TeamAccount struct {
 	ID         int64  `metric:"id" json:"id"`
-	TeamID     uint64 `metric:"index" json:"team_id"`
+	TeamID     int64  `metric:"index" json:"team_id"`
 	AccountKey string `metric:"index" json:"account_key"`
 
 	Debit   float64 `json:"debit"`

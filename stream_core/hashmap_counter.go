@@ -172,8 +172,6 @@ func (hm *HashMapCounter) KeyCollision(key string) (string, error) {
 	}
 
 	offsetValue := binary.LittleEndian.Uint64(hm.data[offset+KEY_POINTER_OFFSET : offset+KEY_POINTER_OFFSET+8])
-	// log.Println("asdasd", hkey, key, hm.data[offset:offset+HASHMAP_METADATA_SIZE])
-	// return ""
 	dkey, _ := hm.dynamicValue.Get(int64(offsetValue))
 	return dkey, nil
 }

@@ -14,7 +14,7 @@ import (
 func TestIndex(t *testing.T) {
 	bee := &BeeTree{
 		nil,
-		sync.Mutex{},
+		sync.RWMutex{},
 		make([]byte, PageSize*PageSize),
 	}
 
@@ -175,7 +175,7 @@ func TestIndex(t *testing.T) {
 func TestManyKey(t *testing.T) {
 	bee := &BeeTree{
 		nil,
-		sync.Mutex{},
+		sync.RWMutex{},
 		make([]byte, PageSize*PageSize),
 	}
 
@@ -183,11 +183,11 @@ func TestManyKey(t *testing.T) {
 
 	errcount := 0
 
-	bee.Insert("accounting_pkey", 123)
+	bee.InsertKeyString("accounting_pkey", 123)
 
 	for c := 0; c < 400; c++ {
 		key := fmt.Sprintf("%d_key", c)
-		bee.Insert(key, uint64(c))
+		bee.InsertKeyString(key, uint64(c))
 
 		off, ok := bee.Get([]byte(key))
 		if !ok {

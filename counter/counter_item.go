@@ -2,8 +2,6 @@ package counter
 
 import (
 	"encoding/binary"
-	"log"
-	"os"
 	"time"
 )
 
@@ -72,12 +70,6 @@ func (c *counter) prev() *counter {
 	if offset == 0 {
 		return nil
 	}
-
-	os.WriteFile("/tmp/stream_engine/debug_file", c.data[c.offset:c.offset+100], 0644)
-	os.WriteFile("/tmp/stream_engine/debug_file2", c.data[c.offset-100:c.offset], 0644)
-
-	log.Println("asdasdasd2", offset, c.key(), c.data[c.offset+24:c.offset+32])
-	log.Println(c.dataMap())
 
 	return newCounter(offset, c.data)
 

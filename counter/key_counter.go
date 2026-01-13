@@ -40,7 +40,7 @@ func (k *KeyCounter) PutInt64(key string, value int64) int64 {
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		k.index.Insert(key, uint64(counter.offset))
+		k.index.InsertKeyString(key, uint64(counter.offset))
 		offset = counter.offset
 	} else {
 		offset = int(existOffset)
@@ -115,7 +115,7 @@ func (k *KeyCounter) PutFloat64(key string, value float64) float64 {
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		k.index.Insert(key, uint64(counter.offset))
+		k.index.InsertKeyString(key, uint64(counter.offset))
 		offset = counter.offset
 	} else {
 		offset = int(existOffset)
@@ -136,7 +136,7 @@ func (k *KeyCounter) PutUint64(key string, value uint64) uint64 {
 
 	if !ok {
 		counter := k.cdata.NewCounter(key)
-		k.index.Insert(key, uint64(counter.offset))
+		k.index.InsertKeyString(key, uint64(counter.offset))
 		offset = counter.offset
 	} else {
 		offset = int(existOffset)

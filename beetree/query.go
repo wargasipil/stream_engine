@@ -6,6 +6,9 @@ import (
 )
 
 func (t *BeeTree) Get(key []byte) (uint64, bool) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	l := t.findLeaf(key)
 
 	page := bpage{
