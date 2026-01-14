@@ -2,72 +2,70 @@ package beetree
 
 import (
 	"bytes"
+	"log"
 	"sort"
 )
 
 func (t *BeeTree) findLeaf(key []byte) int {
 	n := t.rootPage()
-	var page *bpage = &bpage{
-		offset: (int(n) * PageSize) + BeeMetadataSize,
-		data:   t.data,
+	page := getPage(n, t.data)
+
+	deep := 0
+
+	switch page.pageType() {
+	case pageLeaf:
+		return page.pageID()
+	case pageInternal:
+
+		var intPage *internalPage
+
+		for isInternalPage(n, t.data) {
+			intPage = getInternalPage(n, t.data)
+			entries := intPage.getEntry()
+
+			if t.debug {
+				log.Println("key", string(key), "deep", deep, "root", t.rootPage())
+				page.PrintDebug()
+				entries.Print()
+			}
+
+			i := sort.Search(len(entries), func(i int) bool {
+				return bytes.Compare(entries[i].key, key) > 0
+			})
+
+			if len(entries) == i {
+				n = entries[len(entries)-1].pageId
+			} else {
+				// if i == 0 {
+				// 	log.Println(string(key))
+				// 	page.PrintDebug()
+				// 	entries.Print()
+				// }
+				// t.VerifyPage()
+
+				i--
+				n = entries[i].pageId
+				deep++
+
+			}
+		}
+
+		return n
+
+	default:
+		panic("unknown page type")
 	}
-
-	for page.pageType() == pageInternal {
-		// if page.pageType() != pageInternal {
-		// 	panic("unknown page type")
-		// }
-
-		// page = &bpage{
-		// 	offset: (int(page.pageID()) * PageSize) + BeeMetadataSize,
-		// 	data:   t.data,
-		// }
-
-		entries := page.getInternalEntry()
-
-		i := sort.Search(len(entries), func(i int) bool {
-			return bytes.Compare(entries[i].key, key) > 0
-		})
-
-		if i > 0 {
-			i--
-		}
-
-		if len(entries) == i {
-			n = entries[0].pageId
-		} else {
-			// if entries[i] == nil {
-			// 	panic("data corupted cannot find leaf node")
-			// }
-
-			n = int(entries[i].pageId)
-		}
-
-		page = &bpage{
-			offset: (int(n) * PageSize) + BeeMetadataSize,
-			data:   t.data,
-		}
-
-	}
-
-	// entries := page.getEntry()
-	// if len(entries) > 0 {
-	// 	log.Println("leaf finding", string(key), page.pageType())
-	// 	log.Println("leaf min", string(entries[0].key), "max", string(entries[len(entries)-1].key))
-	// }
-
-	return page.pageID()
 }
 
-func (t *BeeTree) pageIdOffset(pageID int) int {
-	return pageID*PageSize + BeeMetadataSize
-}
+// func (t *BeeTree) pageIdOffset(pageID int) int {
+// 	return pageID*PageSize + BeeMetadataSize
+// }
 
-func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
+func (t *BeeTree) splitLeaf(left *leafPage, entries leafEntryList) (int, int) {
 	mid := len(entries) / 2
 
 	rightPageId := t.nextPageId()
-
-	right := newBpage(rightPageId, pageLeaf, t.data)
+	right := newLeafPage(rightPageId, t.data)
 
 	// navigasi leaf
 	right.putNext(left.next())
@@ -84,13 +82,13 @@ func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
 
 	// rewriting data
 	rentries := entries[mid:]
-	right.writeLeafEntry(entries[mid:])
-	left.writeLeafEntry(entries[:mid])
+	right.writeEntry(entries[mid:])
+	left.writeEntry(entries[:mid])
 
 	// handle parent
 	if left.parent() == 0 {
 		rootPageId := t.nextPageId()
-		root := newBpage(rootPageId, pageInternal, t.data)
+		root := newInternalPage(rootPageId, t.data)
 		// updating root to metadata
 		t.putRootPage(rootPageId)
 		// add parent to left and right
@@ -108,15 +106,14 @@ func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
 				pageId: right.pageID(),
 			},
 		}
-		root.writeInternalEntry(internalEntries)
-		return
+		root.writeEntry(internalEntries)
+		return left.pageID(), right.pageID()
 	}
 
+	right.putParent(left.parent())
+
 	separator := rentries[0].key
-	parentPage := &bpage{
-		offset: (left.parent() * PageSize) + BeeMetadataSize,
-		data:   t.data,
-	}
+	parentPage := getInternalPage(left.parent(), t.data)
 
 	entry := internalEntry{
 		key:    separator,
@@ -124,12 +121,14 @@ func (t *BeeTree) splitLeaf(left *bpage, entries entryList) {
 	}
 
 	t.insertIntoParent(parentPage, &entry)
+
+	return left.pageID(), right.pageID()
 }
 
 // ---------------- Internal Insert ----------------
 
-func (t *BeeTree) insertIntoParent(page *bpage, entry *internalEntry) {
-	entries := page.getInternalEntry()
+func (t *BeeTree) insertIntoParent(page *internalPage, entry *internalEntry) {
+	entries := page.getEntry()
 	// entrieslen := len(entries)
 
 	i := sort.Search(len(entries), func(i int) bool {
@@ -144,34 +143,43 @@ func (t *BeeTree) insertIntoParent(page *bpage, entry *internalEntry) {
 	copy(entries[i+1:], entries[i:])
 	entries[i] = entry
 
+	// log.Println("------------writing parent")
+	// entries.Print()
+	// log.Println("------------writing parent")
+
 	if (page.pageSize() + entry.size()) > PageSize {
 		t.splitInternal(page, entries)
 		return
 	}
 
-	page.writeInternalEntry(entries)
+	page.writeEntry(entries)
 }
 
 // ---------------- Internal Split ----------------
 
-func (t *BeeTree) splitInternal(left *bpage, entries []*internalEntry) {
+func (t *BeeTree) splitInternal(left *internalPage, entries []*internalEntry) {
 	mid := len(entries) / 2
 
 	rightPageId := t.nextPageId()
-	right := newBpage(rightPageId, pageInternal, t.data)
+	right := newInternalPage(rightPageId, t.data)
 
 	rentries := entries[mid:]
-	right.writeInternalEntry(rentries)
-	left.writeInternalEntry(entries[:mid])
+	right.writeEntry(rentries)
+	left.writeEntry(entries[:mid])
 
 	if left.parent() == 0 {
 		rootPageId := t.nextPageId()
-		root := newBpage(rootPageId, pageInternal, t.data)
+		root := newInternalPage(rootPageId, t.data)
 		// updating root to metadata
 		t.putRootPage(rootPageId)
 		// add parent to left and right
 		left.putParent(rootPageId)
 		right.putParent(rootPageId)
+
+		for _, entry := range rentries {
+			getPage(entry.pageId, t.data).putParent(rightPageId)
+			// getInternalPage(entry.pageId, t.data).putParent(rightPageId)
+		}
 
 		internalEntry := []*internalEntry{
 			{
@@ -183,19 +191,23 @@ func (t *BeeTree) splitInternal(left *bpage, entries []*internalEntry) {
 				pageId: right.pageID(),
 			},
 		}
-		root.writeInternalEntry(internalEntry)
+		root.writeEntry(internalEntry)
+
 		return
 	}
 
 	separator := rentries[0].key
-	parentPage := &bpage{
-		offset: (left.parent() * PageSize) + BeeMetadataSize,
-		data:   t.data,
-	}
+	parentPage := getInternalPage(left.parent(), t.data)
 
 	entry := internalEntry{
 		key:    separator,
 		pageId: rightPageId,
+	}
+
+	right.putParent(left.parent())
+	for _, entry := range rentries {
+		getPage(entry.pageId, t.data).putParent(rightPageId)
+		// getInternalPage(entry.pageId, t.data).putParent(rightPageId)
 	}
 
 	t.insertIntoParent(parentPage, &entry)
@@ -222,10 +234,7 @@ func (t *BeeTree) Insert(key []byte, value uint64) {
 
 	leaf := t.findLeaf(key)
 
-	page := bpage{
-		offset: (int(leaf) * PageSize) + BeeMetadataSize,
-		data:   t.data,
-	}
+	page := getLeafPage(leaf, t.data)
 
 	entries := page.getEntry()
 	entrieslen := len(entries)
@@ -236,7 +245,7 @@ func (t *BeeTree) Insert(key []byte, value uint64) {
 
 	if i < entrieslen && bytes.Equal(entries[i].key, key) {
 		entries[i].val = value
-		page.writeLeafEntry(entries)
+		page.writeEntry(entries)
 		return
 	}
 
@@ -245,9 +254,9 @@ func (t *BeeTree) Insert(key []byte, value uint64) {
 	entries[i] = &entry
 
 	if (page.pageSize() + entry.size()) > PageSize {
-		t.splitLeaf(&page, entries)
+		t.splitLeaf(page, entries)
 		return
 	}
 
-	page.writeLeafEntry(entries)
+	page.writeEntry(entries)
 }

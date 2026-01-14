@@ -46,9 +46,10 @@ func (r relOffset) Offset(off int) int {
 }
 
 type BeeTree struct {
-	f    *os.File
-	lock sync.RWMutex
-	data mmap.MMap
+	f     *os.File
+	lock  sync.RWMutex
+	data  mmap.MMap
+	debug bool
 }
 
 func NewBeeTree(fname string) (*BeeTree, error) {
@@ -81,11 +82,12 @@ func NewBeeTree(fname string) (*BeeTree, error) {
 		f,
 		sync.RWMutex{},
 		m,
+		false,
 	}
 
 	if isCreateMeta {
 		bee.createMetadata(PageSize * 1024)
-		bee.Insert([]byte{0x0}, 255)
+
 	}
 
 	return bee, nil
@@ -139,7 +141,7 @@ func (t *BeeTree) putRootPage(root int) int {
 func (t *BeeTree) nextPageId() int {
 	next := t.nextPageCount()
 
-	return next - 1
+	return next
 }
 
 // hati hati tidak di lock
@@ -178,11 +180,16 @@ func (t *BeeTree) createMetadata(fsize uint64) {
 	binary.LittleEndian.PutUint64(t.data[8:16], 1)
 	// set filesize
 	binary.LittleEndian.PutUint64(t.data[16:24], fsize)
-	// set root page
-	binary.LittleEndian.PutUint64(t.data[24:32], 0)
 
-	var page relOffset = BeeMetadataSize
-	t.data[page.Offset(0)] = pageLeaf
+	rootId := t.nextPageId()
+	root := newLeafPage(rootId, t.data)
+	root.writeEntry([]*leafEntry{
+		{
+			key: []byte{0x0},
+			val: 255,
+		},
+	})
+	t.putRootPage(rootId)
 }
 
 func LogJson(v ...any) {

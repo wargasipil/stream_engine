@@ -5,19 +5,26 @@ import (
 	"sort"
 )
 
+func (t *BeeTree) GetKeyString(key string) (uint64, bool) {
+	return t.Get([]byte(key))
+}
+
 func (t *BeeTree) Get(key []byte) (uint64, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
+	t.Log("getting key: %s\n", string(key))
+
 	l := t.findLeaf(key)
 
-	page := bpage{
-		offset: (l * PageSize) + BeeMetadataSize,
-		data:   t.data,
-	}
+	page := getLeafPage(l, t.data)
 
 	entries := page.getEntry()
 	entriesLen := len(entries)
+
+	// if t.debug {
+	// 	page.PrintDebug()
+	// }
 
 	i := sort.Search(entriesLen, func(i int) bool {
 		return bytes.Compare(entries[i].key, key) >= 0

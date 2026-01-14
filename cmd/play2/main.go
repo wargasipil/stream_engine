@@ -66,13 +66,13 @@ func mainb() {
 
 	tree.Inspect()
 
-	tree.Insert("sddd", 123)
-	tree.Insert("kedua", 123)
+	tree.InsertKeyString("sddd", 123)
+	tree.InsertKeyString("kedua", 123)
 
 	for i := 0; i < 100000; i++ {
 		k := uuid.New().String()
 		log.Println(k)
-		tree.Insert(k, 400)
+		tree.InsertKeyString(k, 400)
 	}
 
 }

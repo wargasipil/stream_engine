@@ -2,6 +2,7 @@ package beetree
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 /*
@@ -34,24 +35,26 @@ type bpage struct {
 	data   []byte
 }
 
-func newBpage(pageID int, pageType int, data []byte) bpage {
+func getPageType(pageId int, data []byte) int8 {
+	offset := (pageId * PageSize) + BeeMetadataSize
+	return int8(data[offset])
+
+}
+
+func getPage(pageID int, data []byte) *bpage {
+	if pageID == 0 {
+		panic("pageId cannot 0")
+	}
+
 	page := bpage{
 		offset: (pageID * PageSize) + BeeMetadataSize,
 		data:   data,
 	}
-
-	page.putPageType(pageType)
-	page.putPageID(pageID)
-
-	return page
+	return &page
 }
 
 func (p *bpage) pageType() int8 {
 	return int8(p.data[p.offset])
-}
-
-func (p *bpage) putPageType(pageType int) {
-	p.data[p.offset] = byte(pageType)
 }
 
 func (p *bpage) pageID() int {
@@ -102,6 +105,9 @@ func (p *bpage) parent() int {
 }
 
 func (p *bpage) putParent(pageID int) {
+	if pageID == 0 {
+		panic("pageId cannot 0")
+	}
 	binary.LittleEndian.PutUint64(p.data[p.offset+29:p.offset+37], uint64(pageID))
 }
 
@@ -109,87 +115,6 @@ func (p *bpage) bytes() []byte {
 	return p.data[p.offset : p.offset+PageSize]
 }
 
-func (p *bpage) getEntry() entryList {
-	cnt := p.keyCount()
-	res := entryList{}
-
-	var c int16 = 0
-	var klen int16
-	off := p.offset + PageMetadataSize
-	for c < cnt {
-		klen = int16(binary.LittleEndian.Uint16(p.data[off : off+2]))
-		leaf := leafEntry{
-			key: make([]byte, klen),
-			val: binary.LittleEndian.Uint64(p.data[off+2+int(klen) : off+2+int(klen)+8]),
-		}
-		copy(leaf.key, p.data[off+2:off+2+int(klen)])
-		res = append(res, &leaf)
-		off += int(leaf.size())
-		c++
-	}
-	return res
-}
-
-func (p *bpage) getInternalEntry() internalEntryList {
-	cnt := p.keyCount()
-	res := internalEntryList{}
-
-	var c int16 = 0
-	var klen int16
-	off := p.offset + PageMetadataSize
-	for c < cnt {
-		klen = int16(binary.LittleEndian.Uint16(p.data[off : off+2]))
-		d := binary.LittleEndian.Uint64(p.data[off+2+int(klen) : off+2+int(klen)+8])
-		entry := internalEntry{
-			key:    make([]byte, klen),
-			pageId: int(d),
-		}
-		copy(entry.key, p.data[off+2:off+2+int(klen)])
-		res = append(res, &entry)
-		off += int(entry.size())
-		c++
-	}
-	return res
-}
-
-func (p *bpage) writeLeafEntry(entries []*leafEntry) {
-	// sort.Slice(entries, func(i, j int) bool {
-	// 	return bytes.Compare(entries[i].key, entries[j].key) < 0
-	// })
-
-	// set page key count
-	var entryCount int16 = int16(len(entries))
-	p.putKeyCount(entryCount)
-
-	// set data
-	off := p.offset + PageMetadataSize
-	for _, entry := range entries {
-		copy(p.data[off:], entry.data())
-		off += int(entry.size())
-	}
-
-	// set page size
-	pagesize := off - p.offset
-	p.putPageSize(int16(pagesize))
-}
-
-func (p *bpage) writeInternalEntry(entries []*internalEntry) {
-	// sort.Slice(entries, func(i, j int) bool {
-	// 	return bytes.Compare(entries[i].key, entries[j].key) < 0
-	// })
-
-	// set page key count
-	var entryCount int16 = int16(len(entries))
-	p.putKeyCount(entryCount)
-
-	// set data
-	off := p.offset + PageMetadataSize
-	for _, entry := range entries {
-		copy(p.data[off:], entry.data())
-		off += int(entry.size())
-	}
-
-	// set page size
-	pagesize := off - p.offset
-	p.putPageSize(int16(pagesize))
+func (p *bpage) PrintDebug() {
+	fmt.Printf("pageId: %d parentId: %d type: %d offset: %d keyCount: %d next: %d\n", p.pageID(), p.parent(), p.pageType(), p.offset, p.keyCount(), p.next())
 }

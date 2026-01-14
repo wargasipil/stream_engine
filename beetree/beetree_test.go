@@ -16,20 +16,20 @@ func TestIndex(t *testing.T) {
 		nil,
 		sync.RWMutex{},
 		make([]byte, PageSize*PageSize),
+		false,
 	}
 
 	bee.createMetadata(PageSize * PageSize)
 
 	t.Run("test splitpage", func(t *testing.T) {
-		bee.rootPage()
-		page := bpage{
-			offset: bee.pageIdOffset(0),
-			data:   bee.data,
-		}
-		page.putPageType(pageLeaf)
-		page.putPageID(0)
+		rootPageId := bee.rootPage()
+		page := getLeafPage(rootPageId, bee.data)
 
-		page.writeLeafEntry([]*leafEntry{
+		page.writeEntry([]*leafEntry{
+			// {
+			// 	key: []byte{0x0},
+			// 	val: 0,
+			// },
 			{
 				key: []byte("b"),
 				val: 1,
@@ -61,30 +61,25 @@ func TestIndex(t *testing.T) {
 				return bytes.Compare(a.key, b.key)
 			})
 
-			bee.splitLeaf(&page, entries)
+			_, rightPage := bee.splitLeaf(page, entries)
 
-			right := bpage{
-				offset: bee.pageIdOffset(1),
-				data:   bee.data,
-			}
+			right := getLeafPage(rightPage, bee.data)
+			assert.Len(t, right.getEntry(), 3)
 
 			assert.Equal(t, string(entries[2].key), string(right.getEntry()[0].key))
 			assert.Equal(t, page.parent(), right.parent())
 
-			parent := bpage{
-				offset: bee.pageIdOffset(page.parent()),
-				data:   bee.data,
-			}
+			parent := getInternalPage(page.parent(), bee.data)
 
-			internals := parent.getInternalEntry()
+			internals := parent.getEntry()
 			assert.Len(t, internals, 2)
 
-			log.Println("parent")
-			parent.getInternalEntry().Print()
-			log.Println("left")
-			page.getEntry().Print()
-			log.Println("right")
-			right.getEntry().Print()
+			// log.Println("parent")
+			// parent.getInternalEntry().Print()
+			// log.Println("left")
+			// page.getEntry().Print()
+			// log.Println("right")
+			// right.getEntry().Print()
 
 			t.Run("testing split ketiga kali", func(t *testing.T) {
 				entry := &leafEntry{
@@ -100,15 +95,18 @@ func TestIndex(t *testing.T) {
 					return bytes.Compare(a.key, b.key)
 				})
 
-				bee.splitLeaf(&right, entries)
+				_, right2Id := bee.splitLeaf(right, entries)
+				right2 := getLeafPage(right2Id, bee.data)
 
-				right2 := bpage{
-					offset: bee.pageIdOffset(3),
-					data:   bee.data,
-				}
-				log.Println("parent")
-				parent.getInternalEntry().Print()
-				log.Println("right2")
+				assert.NotEqual(t, 0, right2.parent())
+
+				log.Println("parent", parent.pageID())
+				parent.getEntry().Print()
+				log.Println("left", page.pageID())
+				page.getEntry().Print()
+				log.Println("right", right.pageID())
+				right.getEntry().Print()
+				log.Println("right2", right2.pageID())
 				right2.getEntry().Print()
 
 			})
@@ -130,15 +128,20 @@ func TestIndex(t *testing.T) {
 
 		})
 
+		bee.VerifyPage()
+
 		t.Run("getting leaf", func(t *testing.T) {
 			pageId := bee.findLeaf([]byte("d"))
-			assert.Equal(t, 1, pageId)
-
-			pageId = bee.findLeaf([]byte("y"))
 			assert.Equal(t, 3, pageId)
 
+			pageId = bee.findLeaf([]byte("y"))
+			assert.Equal(t, 5, pageId)
+
 			pageId = bee.findLeaf([]byte("b"))
-			assert.Equal(t, 0, pageId)
+			assert.Equal(t, 2, pageId)
+
+			pageId = bee.findLeaf([]byte("c"))
+			assert.Equal(t, 2, pageId)
 
 		})
 
@@ -177,6 +180,7 @@ func TestManyKey(t *testing.T) {
 		nil,
 		sync.RWMutex{},
 		make([]byte, PageSize*PageSize),
+		false,
 	}
 
 	bee.createMetadata(PageSize * PageSize)
@@ -197,6 +201,18 @@ func TestManyKey(t *testing.T) {
 		assert.Equal(t, c, int(off))
 
 	}
+
+	for c := 0; c < 400; c++ {
+		key := fmt.Sprintf("%d_key", c)
+		off, ok := bee.Get([]byte(key))
+		if !ok {
+			errcount++
+		}
+		assert.True(t, ok, key)
+		assert.Equal(t, c, int(off), key)
+
+	}
+
 	off, ok := bee.Get([]byte("accounting_pkey"))
 	assert.True(t, ok)
 	assert.Equal(t, 123, int(off))
