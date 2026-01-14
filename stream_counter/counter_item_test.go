@@ -1,4 +1,4 @@
-package counter
+package stream_counter
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCounter(t *testing.T) {
+func TestCounter2(t *testing.T) {
 	key := "flowtest123412312312312312312312"
 	data := make([]byte, 5+36+len(key))
 	cc := newCounter(5, data)

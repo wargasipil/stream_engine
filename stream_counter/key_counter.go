@@ -1,4 +1,4 @@
-package counter
+package stream_counter
 
 import (
 	"math"
@@ -158,34 +158,31 @@ func (k *KeyCounter) Close() error {
 	return nil
 }
 
-func (k *KeyCounter) LastUpdated(start time.Time, handler func(key string, value uint64) error) error {
+// KeyUpdated implements stream_core.KeyStore.
+func (k *KeyCounter) UpdatedKey(last time.Time, handler func(key string) error) error {
 	var err error
 	c := k.cdata.tail()
-	// head := k.cdata.head()
-	// log.Println("tail", c.key(), "head", head.key())
 
 	for c != nil {
-		// log.Println(c.key(), c.timestamp(), c.value())
+
+		err = handler(c.key())
+		if err != nil {
+			return err
+		}
+
 		prev := c.prev()
 		if prev == nil {
 			break
 		}
 
-		err = handler(c.key(), c.value())
-		if err != nil {
-			return err
+		if prev.timestamp().Before(last) {
+			break
 		}
-
-		// log.Println("prev", prev.key(), prev.offset)
-		// next := c.next()
-		// if next != nil {
-		// 	log.Println("next", next.key(), next.offset)
-		// }
 
 		c = prev
 
-		// time.Sleep(time.Second)
 	}
 
 	return nil
+
 }

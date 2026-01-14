@@ -1,4 +1,4 @@
-package counter
+package stream_counter
 
 import (
 	"encoding/binary"

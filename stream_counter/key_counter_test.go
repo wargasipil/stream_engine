@@ -1,14 +1,13 @@
-package counter_test
+package stream_counter
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/wargasipil/stream_engine/counter"
 )
 
 func TestCounter(t *testing.T) {
-	kv := counter.NewKeyCounter("/tmp/stream_engine/test")
+	kv := NewKeyCounter("/tmp/stream_engine/test")
 	kv.PutFloat64("testkey", 123)
 	assert.Equal(t, 123.00, kv.GetFloat64("testkey"))
 	kv.PutFloat64("testkey2", 1232)

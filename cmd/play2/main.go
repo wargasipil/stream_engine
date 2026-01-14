@@ -6,12 +6,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wargasipil/stream_engine/beetree"
-	"github.com/wargasipil/stream_engine/counter"
+	"github.com/wargasipil/stream_engine/stream_counter"
 )
 
 func main() {
 	// var err error
-	kv := counter.NewKeyCounter("/tmp/stream_engine")
+	kv := stream_counter.NewKeyCounter("/tmp/stream_engine")
 	defer kv.Close()
 
 	// for i := 0; i < 200; i++ {
@@ -48,8 +48,8 @@ func main() {
 	kv.PutFloat64("satu", 1)
 	kv.PutFloat64("dua", 2)
 
-	kv.LastUpdated(time.Now(), func(key string, value uint64) error {
-		log.Println(key, value)
+	kv.UpdatedKey(time.Now(), func(key string) error {
+		log.Println(key)
 		return nil
 	})
 }
