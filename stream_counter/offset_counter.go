@@ -28,7 +28,7 @@ const (
 )
 
 type OffsetCounter struct {
-	lock     sync.Mutex
+	lock     sync.RWMutex
 	filesize int
 	f        *os.File
 	data     mmap.MMap
@@ -62,7 +62,7 @@ func NewOffsetCounter(fname string) (*OffsetCounter, error) {
 		return nil, err
 	}
 
-	count := OffsetCounter{sync.Mutex{}, int(size), f, m}
+	count := OffsetCounter{sync.RWMutex{}, int(size), f, m}
 	if isnew {
 		count.putOffset(OFFSET_COUNTER_META_SIZE)
 	}

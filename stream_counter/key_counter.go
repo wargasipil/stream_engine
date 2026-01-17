@@ -161,6 +161,9 @@ func (k *KeyCounter) Close() error {
 // KeyUpdated implements stream_core.KeyStore.
 func (k *KeyCounter) UpdatedKey(last time.Time, handler func(key string) error) error {
 	var err error
+	k.cdata.lock.RLock()
+	defer k.cdata.lock.RUnlock()
+
 	c := k.cdata.tail()
 
 	for c != nil {
