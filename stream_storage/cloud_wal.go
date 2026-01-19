@@ -62,6 +62,14 @@ func (wal *WalStream) Append(data []byte) error {
 	return err
 }
 
+func (wal *WalStream) Flush() error {
+	if wal.writer == nil {
+		return nil
+	}
+	_, err := wal.writer.Flush()
+	return err
+}
+
 func (wal *WalStream) Replay(handler func(data []byte) error) error {
 	bucket := wal.client.Bucket(wal.bucketName)
 
@@ -116,6 +124,10 @@ func (wal *WalStream) replayFile(name string, apply func(data []byte) error) err
 
 func (wal *WalStream) Close() error {
 	if wal.writer != nil {
+		// _, err := wal.writer.Flush()
+		// if err != nil {
+		// 	return err
+		// }
 		return wal.writer.Close()
 	}
 	wal.client.Close()
@@ -138,6 +150,7 @@ func (wal *WalStream) currentSegmentWriter() (*storage.Writer, error) {
 
 	name := fmt.Sprintf("segment-%020d", segmentId)
 	writer := wal.getObject(name).NewWriter(wal.ctx)
+	writer.ChunkSize = 0
 	wal.writer = writer
 
 	wal.putLastSegmentNumber(segmentId)
